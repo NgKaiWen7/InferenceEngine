@@ -94,23 +94,30 @@ class BPETokenizer:
 
     def decode(self, ids):
         return "".join(self.id_to_token[i] for i in ids)
-    
 
-tokenizer = BPETokenizer("models/qwen3-4B/vocab.json", "models/qwen3-4B/merges.txt")
-encoded = tokenizer.encode("hi how can i help you")
-decoded = tokenizer.decode(encoded)
-print(encoded)
-print(decoded)
+# tokenizer = BPETokenizer("models/qwen3-4B/vocab.json", "models/qwen3-4B/merges.txt")
+# encoded = tokenizer.encode("mello")
+# decoded = tokenizer.decode(encoded)
+# print(encoded)
+# print(decoded)
 
 
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch
 
-hf_tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B", trust_remote_code=True)
+token_id = 14990
 
-text = "Hello world, this is a test."
 
-hf_ids = hf_tokenizer.encode(text)
-hf_tokens = hf_tokenizer.convert_ids_to_tokens(hf_ids)
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B", trust_remote_code=True)
+model = AutoModelForCausalLM.from_pretrained(pretrained_model_name_or_path="Qwen/Qwen3-4B")
 
-print("HF IDs:", hf_ids)
-print("HF tokens:", hf_tokens)
+inputs = tokenizer("Hello", return_tensors="pt")
+layer = model.model.layers[0]
+
+print(layer.self_attn.q_proj.weight.shape)
+print(layer.self_attn.k_proj.weight.shape)
+print(layer.self_attn.v_proj.weight.shape)
+print(layer.self_attn.o_proj.weight.shape)
+with torch.no_grad():
+    outputs = model.generate(**inputs, max_new_tokens=1000)
+print(tokenizer.decode(outputs[0], skip_special_tokens=False))
