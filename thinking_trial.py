@@ -8,6 +8,14 @@ tokenizer = AutoTokenizer.from_pretrained(
     trust_remote_code=True
 )
 
+inputs = tokenizer(
+    "I my name's kai wen!",
+    return_tensors="pt"
+)
+print(inputs)
+exit()
+
+
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_NAME,
     torch_dtype=torch.bfloat16,

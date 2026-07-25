@@ -1,8 +1,12 @@
 CXX = g++
 CXXFLAGS = -std=c++17 -O2 -Iinclude
 
-json_loader:
-	$(CXX) $(CXXFLAGS) main.cpp -o json_loader
+tokenizer: clean tokenizer.cpp include/tokenizer/BPE.cpp
+	$(CXX) $(CXXFLAGS) tokenizer.cpp include/tokenizer/BPE.cpp -o tokenizer
+
+safetensor_loader:
+	$(CXX) $(CXXFLAGS) safe_tensor.cpp -o safe_tensor
 
 clean:
-	rm -f json_loader
+	rm -f tokenizer
+	rm -f safe_tensor
