@@ -95,11 +95,11 @@ class BPETokenizer:
     def decode(self, ids):
         return "".join(self.id_to_token[i] for i in ids)
 
-# tokenizer = BPETokenizer("models/qwen3-4B/vocab.json", "models/qwen3-4B/merges.txt")
-# encoded = tokenizer.encode("mello")
-# decoded = tokenizer.decode(encoded)
-# print(encoded)
-# print(decoded)
+tokenizer = BPETokenizer("models/qwen3-4B/vocab.json", "models/qwen3-4B/merges.txt")
+encoded = tokenizer.encode("😀")
+print(encoded)
+exit()
+decoded = tokenizer.decode(encoded)
 
 
 from transformers import AutoTokenizer, AutoModelForCausalLM

@@ -7,9 +7,9 @@ tokenizer = AutoTokenizer.from_pretrained(
     MODEL_NAME,
     trust_remote_code=True
 )
-
+encoded = tokenizer.backend_tokenizer.encode("😀")
 inputs = tokenizer(
-    "I my name's kai wen!",
+    "😀",
     return_tensors="pt"
 )
 print(inputs)

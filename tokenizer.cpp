@@ -36,7 +36,7 @@ int main()
 
     BPETokenizer tokenizer;
     tokenizer.load(vocabulary, merges);
-    std::vector<int> output = tokenizer.encode("I my name's kai wen!");
+    std::vector<int> output = tokenizer.encode("😀");
 
     for (int i : output){
         std::cout << i << std::endl;

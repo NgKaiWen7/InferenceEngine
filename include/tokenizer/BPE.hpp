@@ -4,7 +4,7 @@
 #include <vector>
 #include <unordered_map>
 #include <utility>
-
+#include <tokenizer/UnicodeEncoder.hpp>
 
 struct PairHash
 {
@@ -46,19 +46,17 @@ private:
     );
 
 
-    std::vector<std::string> byte_encode(
+    std::string byte_encode(
         const std::string& token
     );
 
 
     std::vector<std::string> bpe(
-        const std::vector<std::string>& pieces
+        const std::string& pieces
     );
 
-
-private:
-
     std::unordered_map<std::string,int> vocab_;
+    UnicodeEncoder unicode_encoder;
 
 
     std::unordered_map<
