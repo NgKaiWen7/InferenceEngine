@@ -14,5 +14,6 @@ private:
     void get_embedding(const int token_id, std::vector<float> &output);
     int embedding_dim;
     int vocab_size;
+    SafeTensorLoader tensor_loader;
     uint16_t *embedding_weights;
 };

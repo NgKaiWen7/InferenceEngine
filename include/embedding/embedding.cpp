@@ -5,7 +5,6 @@
 
 void Embedding::load(const std::string file_path)
 {
-    SafeTensorLoader tensor_loader;
     tensor_loader.load(file_path);
     Tensor tensor = tensor_loader.get_tensor("model.embed_tokens.weight");
     embedding_dim = tensor.shape[1];
