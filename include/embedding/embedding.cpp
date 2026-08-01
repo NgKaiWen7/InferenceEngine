@@ -1,9 +1,13 @@
 #include "embedding/embedding.hpp"
 #include "safetensors.hpp"
 #include "utils/conversion.hpp"
+#include "safetensors.hpp"
 
-void Embedding::load(const Tensor &tensor)
+void Embedding::load(const std::string file_path)
 {
+    SafeTensorLoader tensor_loader;
+    tensor_loader.load(file_path);
+    Tensor tensor = tensor_loader.get_tensor("model.embed_tokens.weight");
     embedding_dim = tensor.shape[1];
     vocab_size = tensor.shape[0];
     embedding_weights = reinterpret_cast<uint16_t *>(tensor.data);

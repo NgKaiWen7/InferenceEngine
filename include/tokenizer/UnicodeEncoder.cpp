@@ -23,11 +23,7 @@ bytes_to_unicode()
 
     for (int b = 0; b < 256; b++)
     {
-        if (
-            std::find(
-                bs.begin(),
-                bs.end(),
-                b) == bs.end())
+        if (std::find(bs.begin(), bs.end(), b) == bs.end())
         {
             bs.push_back(b);
             cs.push_back(256 + n);

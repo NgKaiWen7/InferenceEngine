@@ -4,19 +4,41 @@
 #include <sstream>
 #include <climits>
 #include <iostream>
-
+#include <fstream>
 #include <unicode/regex.h>
 #include <unicode/unistr.h>
+#include <nlohmann/json.hpp>
 
-void BPETokenizer::load(
-    const std::unordered_map<std::string, int> &vocab,
-    const std::vector<std::pair<std::string, std::string>> &merges)
+int BPETokenizer::load(const std::string file_path)
 {
-    vocab_ = vocab;
+    std::ifstream file(file_path);
+    if (!file.is_open())
+    {
+        std::cerr << "Failed to open tokenizer.json\n";
+        return -1;
+    }
+    nlohmann::json metadata;
+    file >> metadata;
+    for (auto &[key, value] : metadata["model"]["vocab"].items())
+    {
+        vocabulary[key] = value;
+    }
+
+    std::vector<std::pair<std::string, std::string>> merges;
+    auto &json_merges = metadata["model"]["merges"];
+    merges.reserve(json_merges.size());
+    for (const auto &value : json_merges)
+    {
+        std::string first = value[0].get<std::string>();
+        std::string second = value[1].get<std::string>();
+        merges.emplace_back(first, second);
+    }
+
     for (int i = 0; i < merges.size(); i++)
     {
-        merge_rank_[merges[i]] = i;
+        merge_rank[merges[i]] = i;
     }
+    return 0;
 }
 
 std::vector<int> BPETokenizer::encode(
@@ -28,40 +50,23 @@ std::vector<int> BPETokenizer::encode(
 
     for (const std::string &word : words)
     {
-        std::cout << "Original: "
-                  << word
-                  << std::endl;
-
         std::string bytes = byte_encode(word);
-
-        std::cout << "Byte encoded: "
-                  << bytes
-                  << std::endl;
-
         auto tokens = bpe(bytes);
 
         for (const auto &token : tokens)
         {
-            std::cout << "BPE token: "
-                      << token
-                      << std::endl;
+            auto it = vocabulary.find(token);
 
-            auto it = vocab_.find(token);
-
-            if (it != vocab_.end())
+            if (it != vocabulary.end())
             {
                 ids.push_back(it->second);
             }
             else
             {
-                std::cerr
-                    << "Unknown token: "
-                    << token
-                    << std::endl;
+                std::cerr << "Unknown token: " << token << std::endl;
             }
         }
     }
-
     return ids;
 }
 
@@ -82,24 +87,15 @@ std::vector<std::string> BPETokenizer::pre_tokenize(
         UNICODE_STRING_SIMPLE(
             R"((?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+)");
 
-    icu::RegexPattern *regex =
-        icu::RegexPattern::compile(
-            pattern,
-            0,
-            status);
+    icu::RegexPattern *regex = icu::RegexPattern::compile(pattern, 0, status);
 
-    icu::UnicodeString input =
-        icu::UnicodeString::fromUTF8(text);
+    icu::UnicodeString input = icu::UnicodeString::fromUTF8(text);
 
-    icu::RegexMatcher *matcher =
-        regex->matcher(
-            input,
-            status);
+    icu::RegexMatcher *matcher = regex->matcher(input, status);
 
     while (matcher->find(status))
     {
-        icu::UnicodeString match =
-            matcher->group(status);
+        icu::UnicodeString match = matcher->group(status);
 
         std::string utf8;
 
@@ -110,32 +106,24 @@ std::vector<std::string> BPETokenizer::pre_tokenize(
 
     delete matcher;
     delete regex;
-
     return tokens;
 }
 
-std::string
-BPETokenizer::byte_encode(
-    const std::string &token)
+std::string BPETokenizer::byte_encode(const std::string &token)
 {
     std::string result;
     result = unicode_encoder.encode(token);
     return result;
 }
 
-std::vector<std::string> split_utf8(
-    const std::string& input)
+std::vector<std::string> split_utf8(const std::string &input)
 {
     std::vector<std::string> result;
-
     size_t i = 0;
-
     while (i < input.size())
     {
         size_t len = 1;
-
         unsigned char c = input[i];
-
         if ((c & 0x80) == 0)
         {
             len = 1;
@@ -152,24 +140,15 @@ std::vector<std::string> split_utf8(
         {
             len = 4;
         }
-
-        result.push_back(
-            input.substr(i, len)
-        );
-
+        result.push_back(input.substr(i, len));
         i += len;
     }
-
     return result;
 }
 
-std::vector<std::string> BPETokenizer::bpe(
-    const std::string& word)
+std::vector<std::string> BPETokenizer::bpe(const std::string &word)
 {
-    // Initial symbols
-    std::cout << word << std::endl;
     auto pieces = split_utf8(word);
-
     int best_rank = INT_MAX;
     while (pieces.size() > 1)
     {
@@ -177,11 +156,8 @@ std::vector<std::string> BPETokenizer::bpe(
 
         for (size_t i = 0; i + 1 < pieces.size(); ++i)
         {
-            auto it = merge_rank_.find(
-                {pieces[i], pieces[i + 1]}
-            );
-
-            if (it != merge_rank_.end() &&
+            auto it = merge_rank.find({pieces[i], pieces[i + 1]});
+            if (it != merge_rank.end() &&
                 it->second < best_rank)
             {
                 best_rank = it->second;
@@ -191,16 +167,8 @@ std::vector<std::string> BPETokenizer::bpe(
 
         if (best_pos == -1)
             break;
-
         pieces[best_pos] += pieces[best_pos + 1];
-
-        pieces.erase(
-            pieces.begin() + best_pos + 1
-        );
-    };
-    std::cout << "Best rank: " << best_rank << std::endl;
-    for (std::string str : pieces){
-        std::cout <<str << std::endl;
+        pieces.erase(pieces.begin() + best_pos + 1);
     };
     return pieces;
 }

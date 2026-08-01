@@ -1,7 +1,5 @@
 #include <iostream>
-#include <fstream>
 #include <string>
-#include <nlohmann/json.hpp>
 #include "tokenizer/BPE.hpp"
 #include "safetensors.hpp"
 #include "embedding/embedding.hpp"
@@ -9,6 +7,13 @@
 
 int main()
 {
+    BPETokenizer tokenizer;
+    tokenizer.load("models/qwen3-4B/tokenizer.json");
+    std::vector<int> output = tokenizer.encode("hellow tokenization");
+
+    for (int i : output){
+        std::cout << i << std::endl;
+    }
     /*
     std::string file_path = "models/qwen3-4B/tokenizer.json";
 
@@ -70,6 +75,21 @@ int main()
         std::cout << "\n\n";
     }
     */
-    
+
+    // std::string file_path = "models/qwen3-4B/model-00001-of-00003.safetensors";
+    // SafeTensorLoader tensor_loader;
+    // tensor_loader.load(file_path);
+    // Tensor input_layernorm = tensor_loader.get_tensor("model.layers.0.input_layernorm.weight");
+    // Tensor mlp_proj_down = tensor_loader.get_tensor("model.layers.0.mlp.down_proj.weight");
+    // Tensor mlp_gate_proj = tensor_loader.get_tensor("model.layers.0.mlp.gate_proj.weight");
+    // Tensor mlp_up_proj = tensor_loader.get_tensor("model.layers.0.mlp.up_proj.weight");
+    // Tensor post_attention_layernorm = tensor_loader.get_tensor("model.layers.0.post_attention_layernorm.weight");
+    // Tensor k_norm = tensor_loader.get_tensor("model.layers.0.self_attn.k_norm.weight");
+    // Tensor k_proj = tensor_loader.get_tensor("model.layers.0.self_attn.k_proj.weight");
+    // Tensor o_proj = tensor_loader.get_tensor("model.layers.0.self_attn.o_proj.weight");
+    // Tensor q_norm = tensor_loader.get_tensor("model.layers.0.self_attn.q_norm.weight");
+    // Tensor q_proj = tensor_loader.get_tensor("model.layers.0.self_attn.q_proj.weight");
+    // Tensor v_proj = tensor_loader.get_tensor("model.layers.0.self_attn.v_proj.weight");
+
     return 0;
 }

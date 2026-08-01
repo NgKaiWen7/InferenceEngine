@@ -7,7 +7,7 @@
 class Embedding
 {
 public:
-    void load(const Tensor &tensor);
+    void load(const std::string file_path);
     void encode(const std::vector<int> &token_ids, std::vector<std::vector<float>> &embedding_vector);
 
 private:
