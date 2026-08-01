@@ -20,7 +20,10 @@ struct Tensor
 
     std::vector<int64_t> shape;
 
-    void* data;
+    uint64_t start;
+    uint64_t end;
+
+    char *data;
     size_t size;
 };
 
@@ -28,54 +31,35 @@ class SafeTensorLoader
 {
 
 public:
-
     ~SafeTensorLoader()
     {
         close();
     }
 
-    bool load(const std::string& path)
+    bool load(const std::string &path)
     {
-        fd = open(
-            path.c_str(),
-            O_RDONLY
-        );
+        fd = open(path.c_str(), O_RDONLY);
 
         if (fd < 0)
         {
-            std::cerr 
-                << "Cannot open safetensors\n";
+            std::cerr << "Cannot open safetensors\n";
             return false;
         }
 
-        file_size = lseek(
-            fd,
-            0,
-            SEEK_END
-        );
+        file_size = lseek(fd, 0, SEEK_END);
 
         if (file_size <= 0)
         {
-            std::cerr
-                << "Invalid file size\n";
+            std::cerr << "Invalid file size\n";
             return false;
         }
 
         // mmap whole file
-        mapped = mmap(
-            nullptr,
-            file_size,
-            PROT_READ,
-            MAP_PRIVATE,
-            fd,
-            0
-        );
+        mapped = mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
 
         if (mapped == MAP_FAILED)
         {
-            std::cerr
-                << "mmap failed\n";
-
+            std::cerr << "mmap failed\n";
             mapped = nullptr;
             return false;
         }
@@ -83,115 +67,69 @@ public:
         // Read header size
         uint64_t header_size;
 
-        memcpy(
-            &header_size,
-            mapped,
-            sizeof(uint64_t)
-        );
+        memcpy(&header_size, mapped, sizeof(uint64_t));
 
         // Read JSON header
-        char* header_ptr =
-            static_cast<char*>(mapped)
-            + sizeof(uint64_t);
+        char *header_ptr = static_cast<char *>(mapped) + sizeof(uint64_t);
 
-        std::string header(
-            header_ptr,
-            header_size
-        );
-        std::cout << header << std::endl;
+        std::string header(header_ptr, header_size);
 
-        metadata =
-            nlohmann::json::parse(header);
+        metadata = nlohmann::json::parse(header);
 
-        data_offset =
-            sizeof(uint64_t)
-            + header_size;
+        data_offset = sizeof(uint64_t) + header_size;
 
         return true;
     }
 
     void print_tensors()
     {
-        for(auto& item : metadata.items())
+        for (auto &item : metadata.items())
         {
-            std::cout
-                << item.key()
-                << "\n";
+            std::cout << item.key() << "\n";
 
+            std::cout << "dtype: " << item.value()["dtype"] << "\n";
 
-            std::cout
-                << "dtype: "
-                << item.value()["dtype"]
-                << "\n";
+            std::cout << "shape: " << item.value()["shape"] << "\n";
 
+            auto start = item.value()["data_offsets"][0].get<uint64_t>();
 
-            std::cout
-                << "shape: "
-                << item.value()["shape"]
-                << "\n";
+            auto end = item.value()["data_offsets"][1].get<uint64_t>();
 
-
-            auto start =
-                item.value()["data_offsets"][0]
-                .get<uint64_t>();
-
-
-            auto end =
-                item.value()["data_offsets"][1]
-                .get<uint64_t>();
-
-
-            std::cout
-                << "bytes: "
-                << end - start
-                << "\n\n";
+            std::cout << "bytes: " << end - start << "\n\n";
         }
     }
 
     // Return pointer directly into mmap
-    void* get_tensor(
-        const std::string& name
-    )
+    Tensor get_tensor(const std::string &name)
     {
         if (!metadata.contains(name))
-        {
-            throw std::runtime_error(
-                "Tensor not found: " + name
-            );
-        }
-        auto tensor =
-            metadata[name];
-        uint64_t start =
-            tensor["data_offsets"][0]
-            .get<uint64_t>();
+            throw std::runtime_error("Tensor not found: " + name);
 
-        return static_cast<char*>(mapped)
-            + data_offset
-            + start;
-    }
+        auto json = metadata[name];
 
-    size_t get_tensor_size(
-        const std::string& name
-    )
-    {
-        auto tensor =
-            metadata[name];
-        uint64_t start =
-            tensor["data_offsets"][0]
-            .get<uint64_t>();
-        uint64_t end =
-            tensor["data_offsets"][1]
-            .get<uint64_t>();
+        Tensor tensor;
 
+        tensor.name = name;
+        tensor.dtype = json["dtype"];
 
-        return end - start;
+        tensor.shape = json["shape"].get<std::vector<int64_t>>();
+
+        tensor.start = json["data_offsets"][0].get<uint64_t>();
+
+        tensor.end = json["data_offsets"][1].get<uint64_t>();
+
+        tensor.size = tensor.end - tensor.start;
+
+        tensor.data = static_cast<char *>(mapped) + data_offset + tensor.start;
+
+        return tensor;
     }
 
     std::vector<Tensor> load_all_tensors()
     {
         std::vector<Tensor> tensors;
 
-        for (auto& item : metadata.items())
+        for (auto &item : metadata.items())
         {
             if (item.key() == "__metadata__")
             {
@@ -200,26 +138,15 @@ public:
             }
             Tensor tensor;
             tensor.name = item.key();
-            tensor.dtype =
-                item.value()["dtype"]
-                .get<std::string>();
-            for (auto& dim : item.value()["shape"])
+            tensor.dtype = item.value()["dtype"].get<std::string>();
+            for (auto &dim : item.value()["shape"])
             {
-                tensor.shape.push_back(
-                    dim.get<int64_t>()
-                );
+                tensor.shape.push_back(dim.get<int64_t>());
             }
-            uint64_t start =
-                item.value()["data_offsets"][0]
-                .get<uint64_t>();
-            uint64_t end =
-                item.value()["data_offsets"][1]
-                .get<uint64_t>();
+            uint64_t start = item.value()["data_offsets"][0].get<uint64_t>();
+            uint64_t end = item.value()["data_offsets"][1].get<uint64_t>();
             tensor.size = end - start;
-            tensor.data =
-                static_cast<char*>(mapped)
-                + data_offset
-                + start;
+            tensor.data = static_cast<char *>(mapped) + data_offset + start;
 
             // tensor.data = malloc(tensor.size);
             // memcpy(
@@ -228,8 +155,8 @@ public:
             //         + data_offset
             //         + start,
             //     tensor.size
-            // );      
-                  
+            // );
+
             std::cout << "Tensor name: " << tensor.name << std::endl;
             std::cout << "Tensor size: " << tensor.size << std::endl;
             std::cout << "Tensor type: " << tensor.dtype << std::endl;
@@ -238,7 +165,7 @@ public:
         return tensors;
     }
 
-    nlohmann::json& get_metadata()
+    nlohmann::json &get_metadata()
     {
         return metadata;
     }
@@ -246,23 +173,20 @@ public:
 private:
     void close()
     {
-        if(mapped)
+        if (mapped)
         {
-            munmap(
-                mapped,
-                file_size
-            );
+            munmap( mapped, file_size);
 
             mapped = nullptr;
         }
-        if(fd >= 0)
+        if (fd >= 0)
         {
             ::close(fd);
             fd = -1;
         }
     }
     int fd = -1;
-    void* mapped = nullptr;
+    void *mapped = nullptr;
     size_t file_size = 0;
     uint64_t data_offset = 0;
     nlohmann::json metadata;

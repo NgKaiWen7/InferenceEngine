@@ -1,94 +1,75 @@
 #include <iostream>
-#include <vector>
-#include <unordered_map>
-#include <algorithm>
+#include <fstream>
+#include <string>
+#include <nlohmann/json.hpp>
+#include "tokenizer/BPE.hpp"
+#include "safetensors.hpp"
+#include "embedding/embedding.hpp"
 
-static std::unordered_map<unsigned char, std::string>
-bytes_to_unicode()
-{
-    std::vector<int> bs;
-
-    for (int i = '!'; i <= '~'; i++)
-        bs.push_back(i);
-
-    for (int i = 0xA1; i <= 0xAC; i++)
-        bs.push_back(i);
-
-    for (int i = 0xAE; i <= 0xFF; i++)
-        bs.push_back(i);
-
-    std::vector<int> cs = bs;
-
-    int n = 0;
-
-    for (int b = 0; b < 256; b++)
-    {
-        if (
-            std::find(
-                bs.begin(),
-                bs.end(),
-                b) == bs.end())
-        {
-            bs.push_back(b);
-            cs.push_back(256 + n);
-            n++;
-        }
-    }
-
-    std::unordered_map<unsigned char, std::string> encoder;
-
-    for (size_t i = 0; i < bs.size(); i++)
-    {
-        unsigned char byte = bs[i];
-
-        int codepoint = cs[i];
-
-        std::string utf8;
-
-        if (codepoint <= 0x7F)
-        {
-            utf8.push_back(
-                static_cast<char>(codepoint));
-        }
-        else if (codepoint <= 0x7FF)
-        {
-            utf8.push_back(
-                0xC0 | (codepoint >> 6));
-
-            utf8.push_back(
-                0x80 | (codepoint & 0x3F));
-        }
-        else
-        {
-            utf8.push_back(
-                0xE0 | (codepoint >> 12));
-
-            utf8.push_back(
-                0x80 | ((codepoint >> 6) & 0x3F));
-
-            utf8.push_back(
-                0x80 | (codepoint & 0x3F));
-        }
-
-        encoder[byte] = utf8;
-    }
-
-    return encoder;
-}
 
 int main()
 {
-    auto encoder = bytes_to_unicode();
+    /*
+    std::string file_path = "models/qwen3-4B/tokenizer.json";
 
-    std::string bytes = "😀";
-
-    for (auto b : bytes)
+    std::ifstream file(file_path);
+    if (!file.is_open())
     {
-        std::cout
-            << std::hex
-            << (int)b
-            << " -> "
-            << encoder[b]
-            << "\n";
+        std::cerr << "Failed to open tokenizer.json\n";
+        return 1;
     }
+
+    nlohmann::json metadata;
+    file >> metadata;
+
+    std::unordered_map<std::string, int> vocabulary;
+    for (auto& [key, value] : metadata["model"]["vocab"].items())
+    {
+        vocabulary[key] = value;
+    }
+
+    std::vector<std::pair<std::string, std::string>> merges;
+    auto& json_merges = metadata["model"]["merges"];
+    merges.reserve(json_merges.size());
+    for (const auto& value : json_merges)
+    {
+        std::string first = value[0].get<std::string>();
+        std::string second = value[1].get<std::string>();
+        merges.emplace_back(first, second);
+    }
+
+    BPETokenizer tokenizer;
+    tokenizer.load(vocabulary, merges);
+    std::vector<int> output = tokenizer.encode("hellow tokenization");
+
+    for (int i : output){
+        std::cout << i << std::endl;
+    }
+    std::string file_path = "models/qwen3-4B/model-00001-of-00003.safetensors";
+    SafeTensorLoader tensor_loader;
+    tensor_loader.load(file_path);
+    Tensor embedding_tensor = tensor_loader.get_tensor("model.embed_tokens.weight");
+    
+    Embedding embedding_layer;
+    embedding_layer.load(embedding_tensor);
+    std::vector<std::vector<float>> embeddings = {{}};
+    std::vector<int> token_ids = {1, 2, 4};
+    embedding_layer.encode(token_ids, embeddings);
+    
+    for (size_t i = 0; i < embeddings.size(); i++)
+    {
+        std::cout << "Token " << token_ids[i] << ":\n";
+
+        size_t limit = std::min<size_t>(10, embeddings[i].size());
+
+        for (size_t j = 0; j < limit; j++)
+        {
+            std::cout << embeddings[i][j] << " ";
+        }
+
+        std::cout << "\n\n";
+    }
+    */
+    
+    return 0;
 }

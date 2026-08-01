@@ -167,11 +167,12 @@ std::vector<std::string> BPETokenizer::bpe(
     const std::string& word)
 {
     // Initial symbols
+    std::cout << word << std::endl;
     auto pieces = split_utf8(word);
 
+    int best_rank = INT_MAX;
     while (pieces.size() > 1)
     {
-        int best_rank = INT_MAX;
         int best_pos = -1;
 
         for (size_t i = 0; i + 1 < pieces.size(); ++i)
@@ -196,7 +197,10 @@ std::vector<std::string> BPETokenizer::bpe(
         pieces.erase(
             pieces.begin() + best_pos + 1
         );
-    }
-
+    };
+    std::cout << "Best rank: " << best_rank << std::endl;
+    for (std::string str : pieces){
+        std::cout <<str << std::endl;
+    };
     return pieces;
 }
