@@ -104,24 +104,15 @@ public:
     {
         if (!metadata.contains(name))
             throw std::runtime_error("Tensor not found: " + name);
-
         auto json = metadata[name];
-
         Tensor tensor;
-
         tensor.name = name;
         tensor.dtype = json["dtype"];
-
         tensor.shape = json["shape"].get<std::vector<int64_t>>();
-
         tensor.start = json["data_offsets"][0].get<uint64_t>();
-
         tensor.end = json["data_offsets"][1].get<uint64_t>();
-
         tensor.size = tensor.end - tensor.start;
-
         tensor.data = static_cast<char *>(mapped) + data_offset + tensor.start;
-
         return tensor;
     }
 
@@ -149,13 +140,7 @@ public:
             tensor.data = static_cast<char *>(mapped) + data_offset + start;
 
             // tensor.data = malloc(tensor.size);
-            // memcpy(
-            //     tensor.data,
-            //     static_cast<char*>(mapped)
-            //         + data_offset
-            //         + start,
-            //     tensor.size
-            // );
+            // memcpy(tensor.data, static_cast<char *>(mapped) + data_offset + start, tensor.size);
 
             std::cout << "Tensor name: " << tensor.name << std::endl;
             std::cout << "Tensor size: " << tensor.size << std::endl;
@@ -175,7 +160,7 @@ private:
     {
         if (mapped)
         {
-            munmap( mapped, file_size);
+            munmap(mapped, file_size);
 
             mapped = nullptr;
         }

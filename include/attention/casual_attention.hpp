@@ -13,23 +13,19 @@ private:
         const std::vector<float> &input,
         std::vector<float> &output);
 
-    void rope(
-        std::vector<float> &q,
-        std::vector<float> &k);
-
-    void Attention::rms_norm(
-        std::vector<float> &x,
+    void rms_norm(
         const Tensor &weight,
-        int head_dim,
-        float eps = 1e-6f);
+        std::vector<float> &x,
+        int head_dim);
 
-    void Attention::apply_rope(
+    void apply_rope(
         std::vector<float> &x,
         int head_dim,
-        int position,
-        float theta = 1000000.0f);
+        int position);
 
     void attention();
+
+    void softmax(const std::vector<float>& input, std::vector<float>& output);
 
     SafeTensorLoader tensor_loader;
 

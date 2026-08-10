@@ -36,7 +36,6 @@ void Attention::forward(
     const std::vector<std::vector<float>> &tokens,
     std::vector<std::vector<float>> &output)
 {
-
     int i = 0;
     std::vector<std::vector<float>> Q;
     std::vector<std::vector<float>> K;
@@ -51,8 +50,8 @@ void Attention::forward(
         linear(v_proj, token, v);
     
         // RMS Norm
-        rms_norm(q, q_norm, 80);
-        rms_norm(k, k_norm, 80);
+        rms_norm(q_norm, q, 80);
+        rms_norm(k_norm, k,  80);
 
         // RoPE
         apply_rope(q, 80, i);
@@ -63,7 +62,33 @@ void Attention::forward(
         V.push_back(std::move(v));
         i++;
     }
-    output.push_back(q);
+
+    for (int i = 0; i < Q.size(); i++)
+    {
+        std::vector<float> scores;
+
+        for (int j = 0; j < K.size(); j++)
+        {
+            float score = 0.0f;
+
+            for (int d = 0; d < Q[i].size(); d++)
+                score += Q[i][d] * K[j][d];
+
+            score /= std::sqrt(Q[i].size());
+            scores.push_back(score);
+        }
+        
+        std::vector<float> softmax_scores;
+        softmax(scores, softmax_scores);
+
+        std::vector<float> attention_output(V[i].size(), 0.0f);
+
+        for (int j = 0; j < V.size(); j++)
+            for (int d = 0; d < V[j].size(); d++)
+                attention_output[d] += softmax_scores[j] * V[j][d];
+
+        output.push_back(std::move(attention_output));
+    }
 }
 
 void Attention::linear(
@@ -99,10 +124,9 @@ void Attention::linear(
 }
 
 void Attention::rms_norm(
-    std::vector<float> &x,
     const Tensor &weight,
-    int head_dim,
-    float eps = 1e-6f)
+    std::vector<float> &x,
+    int head_dim)
 {
     const uint16_t *w = reinterpret_cast<const uint16_t *>(weight.data);
 
@@ -121,13 +145,13 @@ void Attention::rms_norm(
 
         mean_square /= head_dim;
 
-        float inv_rms = 1.0f / std::sqrt(mean_square + eps);
+        float inv_rms = 1.0f / std::sqrt(mean_square + 1e-6f);
 
-        // Normalize and apply learned weight
+        // Apply RMS normalization and the learned weight.
         for (int i = 0; i < head_dim; i++)
         {
-            x[offset + i] *= inv_rms;
-            x[offset + i] *= bf16_to_float(w[i]);
+            float weight = bf16_to_float(w[i]);
+            x[offset + i] = x[offset + i] * inv_rms * weight;
         }
     }
 }
@@ -135,27 +159,48 @@ void Attention::rms_norm(
 void Attention::apply_rope(
     std::vector<float> &x,
     int head_dim,
-    int position,
-    float theta = 1000000.0f)
+    int position)
 {
-    int num_heads = x.size() / head_dim;
-    int half = head_dim / 2;
+    int dim = x.size();
 
-    for (int h = 0; h < num_heads; h++)
+    for (int i = 0; i < dim; i += 2)
     {
-        float *head = x.data() + h * head_dim;
+        float exponent = static_cast<float>(i) / dim;
+        float frequency = 1.0f / std::pow(10000.0f, exponent);
+        float angle = position * frequency;
 
-        for (int i = 0; i < half; i++)
-        {
-            float freq = std::pow(theta, -2.0f * i / head_dim);
-            float angle = position * freq;
-            float c = std::cos(angle);
-            float s = std::sin(angle);
-            float x0 = head[i];
-            float x1 = head[i + half];
+        float cos_theta = std::cos(angle);
+        float sin_theta = std::sin(angle);
 
-            head[i] = x0 * c - x1 * s;
-            head[i + half] = x0 * s + x1 * c;
-        }
+        float x0 = x[i];
+        float x1 = x[i + 1];
+
+        x[i] = x0 * cos_theta - x1 * sin_theta;
+        x[i + 1] = x0 * sin_theta + x1 * cos_theta;
     }
+}
+
+void Attention:: softmax(const std::vector<float>& input, std::vector<float>& output) {
+    if (input.empty()) {
+        return;
+    }
+    // 1. Find the maximum value in the input vector to prevent overflow
+    float max_val = *std::max_element(input.begin(), input.end());
+
+    output.resize(input.size());
+    float sum = 0.0;
+
+    // 2. Compute exponentials shifted by the maximum value
+    for (size_t i = 0; i < input.size(); ++i) {
+        output[i] = std::exp(input[i] - max_val);
+        sum += output[i];
+    }
+
+    // 3. Normalize the values so they sum up to 1
+    // Multiplying by the reciprocal is faster than dividing in each iteration
+    float inv_sum = 1.0 / sum;
+    for (size_t i = 0; i < output.size(); ++i) {
+        output[i] *= inv_sum;
+    }
+    return;
 }

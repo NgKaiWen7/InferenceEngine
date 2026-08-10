@@ -28,8 +28,7 @@ int main()
     
     Attention attention_layer;
     attention_layer.load(file_path);
-    std::vector<float> output;
+    std::vector<std::vector<float>> output;
     attention_layer.forward(embeddings, output);
-
     return 0;
 }
