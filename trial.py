@@ -1,19 +1,25 @@
-import cv2
+from safetensors.torch import load_file
+from transformers import AutoTokenizer
 import numpy as np
 
-img = cv2.imread("test.png", cv2.IMREAD_UNCHANGED)
+weights = load_file("bge-m3-safetensors/model.safetensors")
+tokenizer = AutoTokenizer.from_pretrained("BAAI/bge-m3")
 
-# Ensure BGRA
-if img.shape[2] == 3:
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
+weight = weights["embeddings.word_embeddings.weight"]
 
-hsv = cv2.cvtColor(img[:, :, :3], cv2.COLOR_BGR2HSV)
+text = "h"
+ids = tokenizer.encode(text, add_special_tokens=False)
 
-h, s, v = cv2.split(hsv)
+print("IDs:", ids)
+print("Tokens:", tokenizer.convert_ids_to_tokens(ids))
 
-mask = (s < 20) & (v > 180)
+for token_id in ids:
+    embedding = weight[token_id].numpy()
 
-# Replace grey/white pixels with white
-img[mask] = [255, 255, 255, 255]
-
-cv2.imwrite("output.png", img)
+    print(f"\ntoken_id = {token_id}")
+    print("shape:", embedding.shape)
+    print("first 10:", embedding[:10])
+    print("min:", embedding.min())
+    print("max:", embedding.max())
+    print("mean:", embedding.mean())
+    print("L2:", np.linalg.norm(embedding))

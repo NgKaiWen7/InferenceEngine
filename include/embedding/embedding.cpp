@@ -6,7 +6,7 @@
 void Embedding::load(const std::string file_path)
 {
     tensor_loader.load(file_path);
-    Tensor tensor = tensor_loader.get_tensor("model.embed_tokens.weight");
+    Tensor tensor = tensor_loader.get_tensor("embeddings.word_embeddings.weight");
     embedding_dim = tensor.shape[1];
     vocab_size = tensor.shape[0];
     embedding_weights = reinterpret_cast<uint16_t *>(tensor.data);

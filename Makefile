@@ -20,6 +20,18 @@ include/attention/casual_attention.cpp
 	    -licuuc -licui18n \
 	    -o main
 		
+xlmr: main.cpp \
+	include/tokenizer/BGEtokenizer.cpp \
+	include/utils/conversion.cpp \
+	include/embedding/embedding.cpp
+	$(CXX) $(CXXFLAGS) \
+	    main.cpp \
+		include/tokenizer/BGEtokenizer.cpp \
+		include/embedding/embedding.cpp \
+	    include/utils/conversion.cpp \
+	    -licuuc -licui18n -lsentencepiece \
+	    -o main
+
 safetensor_loader:
 	$(CXX) $(CXXFLAGS) safe_tensor.cpp -o safe_tensor
 

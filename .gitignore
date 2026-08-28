@@ -1,2 +1,4 @@
 models/**
 models/qwen3-4B/**
+bge-m3-safetensors/*
+xlm-roberta-base/*

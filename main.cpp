@@ -1,34 +1,34 @@
 #include <iostream>
-#include <string>
-#include "tokenizer/BPE.hpp"
-#include "safetensors.hpp"
+#include "tokenizer/BGEtokenizer.hpp"
 #include "embedding/embedding.hpp"
-#include "attention/casual_attention.hpp"
 
 int main()
 {
-    /*
-    BPETokenizer tokenizer;
-    tokenizer.load("models/qwen3-4B/tokenizer.json");
-    std::vector<int> output = tokenizer.encode("hellow tokenization");
+    BGEtokenizer tokenizer;
 
-    for (int i : output){
-        std::cout << i << std::endl;
+    if (!tokenizer.load("xlm-roberta-base/sentencepiece.bpe.model"))
+    {
+        std::cerr << "Failed to load tokenizer\n";
+        return 1;
     }
-    for (int i : output){
-        std::cout << i << std::endl;
+
+    // auto ids = tokenizer.encode("h");
+
+    // for (int id : ids)
+    //     std::cout << id << ' ';
+
+    // std::cout << '\n';
+
+    Embedding embedding;
+    embedding.load("bge-m3-safetensors/model.safetensors");
+    std::vector<std::vector<float>> embedding_vector;
+    std::vector<int> ids = {1096};
+    embedding.encode(ids, embedding_vector);
+    for (std::vector<float> vector: embedding_vector){
+        for (float emd: vector){
+            std::cout << emd << ", ";
+        }
+        std::cout << std::endl;
     }
-    */
-    std::string file_path = "models/qwen3-4B/model-00001-of-00003.safetensors";
-    Embedding embedding_layer;
-    embedding_layer.load(file_path);
-    std::vector<std::vector<float>> embeddings;
-    std::vector<int> token_ids = {1};
-    embedding_layer.encode(token_ids, embeddings);
-    
-    Attention attention_layer;
-    attention_layer.load(file_path);
-    std::vector<std::vector<float>> output;
-    attention_layer.forward(embeddings, output);
-    return 0;
+
 }
