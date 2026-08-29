@@ -2,6 +2,7 @@
 #include "tokenizer/BGEtokenizer.hpp"
 #include "embedding/embedding.hpp"
 #include "attention/self_attention.hpp"
+#include "pooler/pooler.hpp"
 #include <stdfloat>
 
 int main()
@@ -14,7 +15,7 @@ int main()
         return 1;
     }
 
-    auto ids = tokenizer.encode("b");
+    auto ids = tokenizer.encode("hi, this is a sample sentence");
     for (int i: ids){
         std::cout << i << ", ";
     }
@@ -37,21 +38,36 @@ int main()
     //     }
     //     std::cout << std::endl;
     // }
-    TransformerLayer transformer;
-    transformer.load("bge-m3-safetensors/model.safetensors", 0);
-    std::vector<std::vector<float>> output;
-    transformer.attention(embedding_vector, output);
-
-    TransformerLayer transformer2;
-    transformer.load("bge-m3-safetensors/model.safetensors", 1);
-    std::vector<std::vector<float>> output2;
-    transformer.attention(output, output2);
-    for (size_t i = 0; i < 3; i++)
+    std::vector<std::vector<float>> output = embedding_vector;
+    for (int layer = 0; layer < 24; ++layer)
     {
-        for (int j = 0; j < 10; j++)
-        {
-            std::cout << output2[i][j] << ", ";
+        TransformerLayer transformer;
+
+        transformer.load(
+            "bge-m3-safetensors/model.safetensors",
+            layer);
+
+        std::vector<std::vector<float>> next_output;
+
+        transformer.attention(output, next_output);
+
+        output = std::move(next_output);
+    }
+    Pooler pooler;
+    pooler.load("bge-m3-safetensors/model.safetensors");
+    std::vector<std::vector<float>> final_output;
+    std::vector<std::vector<float>> pooler_input = {output[0]};
+    pooler.pool(pooler_input, final_output);
+    for (size_t i = 0; i < final_output.size(); i++){
+        for (int j = 0; j < 10; j++){
+            std::cout << final_output[i][j] << ", ";
         }
-        std::cout << std::endl;
+        std::cout<< std::endl;
+    }
+    for (size_t i = 0; i < final_output.size(); i++){
+        for (int j = 1023; j > 1020; j--){
+            std::cout << final_output[i][j] << ", ";
+        }
+        std::cout<< std::endl;
     }
 }

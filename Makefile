@@ -24,13 +24,15 @@ xlmr: main.cpp \
 	include/tokenizer/BGEtokenizer.cpp \
 	include/utils/conversion.cpp \
 	include/embedding/embedding.cpp \
-	include/attention/self_attention.cpp
+	include/attention/self_attention.cpp \
+	include/pooler/pooler.cpp
 	$(CXX) $(CXXFLAGS) \
 	    main.cpp \
 		include/tokenizer/BGEtokenizer.cpp \
 		include/embedding/embedding.cpp \
 	    include/utils/conversion.cpp \
 		include/attention/self_attention.cpp \
+		include/pooler/pooler.cpp \
 	    -licuuc -licui18n -lsentencepiece \
 	    -o main
 

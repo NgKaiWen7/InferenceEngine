@@ -16,15 +16,14 @@ tokenizer = AutoTokenizer.from_pretrained(
 
 model.eval()
 
-inputs = tokenizer("b", return_tensors="pt")
+inputs = tokenizer("hi, this is a sample sentence", return_tensors="pt")
 print(inputs)
 with torch.no_grad():
     outputs = model(
         **inputs,
         output_hidden_states=True
     )
-print(outputs.hidden_states[2][0, :, :10])
-exit()
 for i, hidden in enumerate(outputs.hidden_states):
     print(i, hidden.shape)
     print(hidden[0, :, :10])
+print(outputs.pooler_output)
