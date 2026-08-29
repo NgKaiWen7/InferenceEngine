@@ -113,6 +113,11 @@ public:
         tensor.end = json["data_offsets"][1].get<uint64_t>();
         tensor.size = tensor.end - tensor.start;
         tensor.data = static_cast<char *>(mapped) + data_offset + tensor.start;
+        // std::cout << "dtype: " << tensor.dtype << '\n';
+        // std::cout << "start: " << tensor.start << '\n';
+        // std::cout << "end: " << tensor.end << '\n';
+        // std::cout << "size: " << tensor.size << '\n';
+        // std::cout << "data_offset: " << data_offset << '\n';
         return tensor;
     }
 
