@@ -16,7 +16,8 @@ int main()
     }
 
     auto ids = tokenizer.encode("hi, this is a sample sentence");
-    for (int i: ids){
+    for (int i : ids)
+    {
         std::cout << i << ", ";
     }
     std::cout << std::endl;
@@ -53,21 +54,33 @@ int main()
 
         output = std::move(next_output);
     }
+    // Mean pooling
+std::vector<float> embedding_output = output[0];
+
+float norm = 0.0f;
+
+for (float x : embedding_output)
+    norm += x * x;
+
+norm = std::sqrt(norm);
+
+for (float &x : embedding_output)
+    x /= norm;
+
+    for (int j = 0; j < 3; j++)
+    {
+        std::cout << embedding_output[j] << ", ";
+    }
+    std::cout << std::endl;
+    for (int j = 1023; j > 1020; j--)
+    {
+        std::cout << embedding_output[j] << ", ";
+    }
+    std::cout << std::endl;
+
     Pooler pooler;
     pooler.load("bge-m3-safetensors/model.safetensors");
     std::vector<std::vector<float>> final_output;
     std::vector<std::vector<float>> pooler_input = {output[0]};
     pooler.pool(pooler_input, final_output);
-    for (size_t i = 0; i < final_output.size(); i++){
-        for (int j = 0; j < 10; j++){
-            std::cout << final_output[i][j] << ", ";
-        }
-        std::cout<< std::endl;
-    }
-    for (size_t i = 0; i < final_output.size(); i++){
-        for (int j = 1023; j > 1020; j--){
-            std::cout << final_output[i][j] << ", ";
-        }
-        std::cout<< std::endl;
-    }
 }
