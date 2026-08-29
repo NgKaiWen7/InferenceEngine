@@ -1,32 +1,40 @@
 #include <iostream>
 #include "tokenizer/BGEtokenizer.hpp"
 #include "embedding/embedding.hpp"
+#include <stdfloat>
 
 int main()
 {
     BGEtokenizer tokenizer;
 
-    if (!tokenizer.load("xlm-roberta-base/sentencepiece.bpe.model"))
+    if (!tokenizer.load("bge-m3-safetensors/sentencepiece.bpe.model"))
     {
         std::cerr << "Failed to load tokenizer\n";
         return 1;
     }
 
-    // auto ids = tokenizer.encode("h");
+    auto ids = tokenizer.encode("b");
 
-    // for (int id : ids)
-    //     std::cout << id << ' ';
+    for (int id : ids)
+        std::cout << id << ' ';
 
-    // std::cout << '\n';
+    std::cout << '\n';
 
     Embedding embedding;
     embedding.load("bge-m3-safetensors/model.safetensors");
-    std::vector<std::vector<float>> embedding_vector;
-    std::vector<int> ids = {1096};
+    // std::vector<std::float16_t> vector;
+    // embedding.get_embedding(0, vector);
+    //     std::cout << "vector size: " << vector.size() << '\n';
+    //     for (int i = 0; i < 10; i++){
+    //         std::cout << vector[i] << ", ";
+    //     }
+    //     std::cout << std::endl;
+    std::vector<std::vector<std::float16_t>> embedding_vector;
     embedding.encode(ids, embedding_vector);
-    for (std::vector<float> vector: embedding_vector){
-        for (float emd: vector){
-            std::cout << emd << ", ";
+    for (const auto& vector: embedding_vector){
+        std::cout << "embedding_vector size: " << vector.size() << '\n';
+        for (int i = 0; i < 10; i++){
+            std::cout << vector[i] << ", ";
         }
         std::cout << std::endl;
     }
