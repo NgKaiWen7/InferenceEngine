@@ -9,22 +9,21 @@
 int main()
 {
     BGEtokenizer tokenizer;
-
+    
     if (!tokenizer.load("bge-m3-safetensors/sentencepiece.bpe.model"))
     {
         std::cerr << "Failed to load tokenizer\n";
         return 1;
     }
     
-        Embedding embedding;
-        embedding.load("bge-m3-safetensors/model.safetensors");
+    Embedding embedding;
+    embedding.load("bge-m3-safetensors/model.safetensors");
     
-        std::vector<TransformerLayer> layers(24);
-        for (int i = 0; i < 24; ++i)
-            layers[i].load("bge-m3-safetensors/model.safetensors", i);
-
+    std::vector<TransformerLayer> layers(24);
+    for (int i = 0; i < 24; ++i)
+    layers[i].load("bge-m3-safetensors/model.safetensors", i);
+    
     auto start = std::chrono::high_resolution_clock::now();
-
     auto token_ids = tokenizer.encode(
         "This is a longer sample sentence for benchmarking the BGE-M3 inference engine. "
         "The purpose is to evaluate the performance of tokenisation, embedding generation, "
@@ -34,7 +33,7 @@ int main()
         "an implementation optimised with OpenBLAS and CPU SIMD instructions. "
         "The input should contain enough tokens to make computational differences measurable "
         "while remaining representative of typical semantic embedding workloads.");
-
+        
     Tensor embedding_vector;
     embedding_vector.size = token_ids.size() * 1024;
     embedding_vector.shape = {static_cast<int64_t>(token_ids.size()), static_cast<int64_t>(1024)};
@@ -64,20 +63,4 @@ int main()
     auto end = std::chrono::high_resolution_clock::now();
     double total = std::chrono::duration<double, std::milli>(end - start).count();
     std::cout << "Average: " << total << " ms\n";
-
-    for (int j = 0; j < 3; ++j)
-        std::cout << embedding_output[j] << ", ";
-
-    std::cout << std::endl;
-
-    for (int j = 1023; j > 1020; --j)
-        std::cout << embedding_output[j] << ", ";
-    std::cout << std::endl;
-
-    // std::cout << std::endl;
-    // Pooler pooler;
-    // pooler.load("bge-m3-safetensors/model.safetensors");
-    // std::vector<std::vector<float>> final_output;
-    // std::vector<std::vector<float>> pooler_input = {output[0]};
-    // pooler.pool(pooler_input, final_output);
 }
