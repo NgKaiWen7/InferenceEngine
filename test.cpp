@@ -1,94 +1,88 @@
+#include <cblas.h>
 #include <iostream>
-#include <vector>
-#include <unordered_map>
-#include <algorithm>
-
-static std::unordered_map<unsigned char, std::string>
-bytes_to_unicode()
-{
-    std::vector<int> bs;
-
-    for (int i = '!'; i <= '~'; i++)
-        bs.push_back(i);
-
-    for (int i = 0xA1; i <= 0xAC; i++)
-        bs.push_back(i);
-
-    for (int i = 0xAE; i <= 0xFF; i++)
-        bs.push_back(i);
-
-    std::vector<int> cs = bs;
-
-    int n = 0;
-
-    for (int b = 0; b < 256; b++)
-    {
-        if (
-            std::find(
-                bs.begin(),
-                bs.end(),
-                b) == bs.end())
-        {
-            bs.push_back(b);
-            cs.push_back(256 + n);
-            n++;
-        }
-    }
-
-    std::unordered_map<unsigned char, std::string> encoder;
-
-    for (size_t i = 0; i < bs.size(); i++)
-    {
-        unsigned char byte = bs[i];
-
-        int codepoint = cs[i];
-
-        std::string utf8;
-
-        if (codepoint <= 0x7F)
-        {
-            utf8.push_back(
-                static_cast<char>(codepoint));
-        }
-        else if (codepoint <= 0x7FF)
-        {
-            utf8.push_back(
-                0xC0 | (codepoint >> 6));
-
-            utf8.push_back(
-                0x80 | (codepoint & 0x3F));
-        }
-        else
-        {
-            utf8.push_back(
-                0xE0 | (codepoint >> 12));
-
-            utf8.push_back(
-                0x80 | ((codepoint >> 6) & 0x3F));
-
-            utf8.push_back(
-                0x80 | (codepoint & 0x3F));
-        }
-
-        encoder[byte] = utf8;
-    }
-
-    return encoder;
-}
 
 int main()
 {
-    auto encoder = bytes_to_unicode();
+    // Input: M x K = 2 x 2
+    //
+    // [1 2]
+    // [3 4]
+    float input[] = {
+        1, 2,
+        3, 4
+    };
 
-    std::string bytes = "😀";
+    // Weight: N x K = 3 x 2
+    //
+    // [1  2]
+    // [3  4]
+    // [5  6]
+    float weight[] = {
+        1, 2,
+        3, 4,
+        5, 6
+    };
 
-    for (auto b : bytes)
+    // Bias: N = 3
+    float bias[] = {
+        10, 20, 30
+    };
+
+    // Output: M x N = 2 x 3
+    //
+    // [ ? ? ? ]
+    // [ ? ? ? ]
+    float output[2 * 3];
+
+    size_t M = 2;
+    size_t K = 2;
+    size_t N = 3;
+
+    cblas_sgemm(
+        CblasRowMajor,
+        CblasNoTrans,
+        CblasTrans,
+        M,
+        N,
+        K,
+        1.0f,
+        input,
+        K,
+        weight,
+        K,
+        0.0f,
+        output,
+        N
+    );
+
+    // Add bias
+    // for (size_t i = 0; i < M; ++i)
+    //     for (size_t j = 0; j < N; ++j)
+    //         output[i * N + j] += bias[j];
+
+    std::cout << "Input:\n";
+    for (size_t i = 0; i < M; ++i)
     {
-        std::cout
-            << std::hex
-            << (int)b
-            << " -> "
-            << encoder[b]
-            << "\n";
+        for (size_t j = 0; j < K; ++j)
+            std::cout << input[i * K + j] << " ";
+        std::cout << '\n';
     }
+
+    std::cout << "\nWeight:\n";
+    for (size_t i = 0; i < N; ++i)
+    {
+        for (size_t j = 0; j < K; ++j)
+            std::cout << weight[i * K + j] << " ";
+        std::cout << '\n';
+    }
+
+    std::cout << "\nOutput:\n";
+    for (size_t i = 0; i < M; ++i)
+    {
+        for (size_t j = 0; j < N; ++j)
+            std::cout << output[i * N + j] << " ";
+        std::cout << '\n';
+    }
+
+    return 0;
 }

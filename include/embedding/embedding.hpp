@@ -9,7 +9,7 @@ class Embedding
 {
 public:
     void load(const std::string file_path);
-    void encode(const std::vector<int> &token_ids, Tensor embeddings);
+    void encode(const std::vector<int> &token_ids, Tensor &embeddings);
 
 private:
     int embedding_dim;

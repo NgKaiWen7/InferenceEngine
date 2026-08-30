@@ -9,13 +9,24 @@ TEXT_ENCODER = SentenceTransformer(
 )
 print(TEXT_ENCODER)
 
-texts = ["hi, this is a sample sentence"]
+texts = [
+    "b"
+]
+
+import time
+
+start = time.perf_counter()
 
 embeddings = TEXT_ENCODER.encode(
     texts,
-    normalize_embeddings=False,
+    normalize_embeddings=True,
     batch_size=8,
 )
+
+elapsed = time.perf_counter() - start
+
+print(f"Encoding time: {elapsed * 1e6:.2f} us")
+print(f"Encoding time: {elapsed * 1e3:.3f} ms")
 
 print("shape:", embeddings.shape)
 print(embeddings[0])

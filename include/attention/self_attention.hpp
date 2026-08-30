@@ -9,21 +9,9 @@ class TransformerLayer
 {
 public:
     void load(const std::string &file_path, int layer);
-    void linear(
-        const std::vector<std::vector<float>> &input,
-        const Tensor weight,
-        const Tensor bias,
-        int input_size,
-        int output_size,
-        std::vector<std::vector<float>> &output);
-    void layer_norm(
-        const std::vector<std::vector<float>> &attention_dense,
-        const Tensor weight,
-        const Tensor bias,
-        std::vector<std::vector<float>> &output);
-    void attention(
-        const std::vector<std::vector<float>> &input,
-        std::vector<std::vector<float>> &output);
+    void linear(const Tensor &input, const Tensor &weight, const Tensor &bias, Tensor &output);
+    void layer_norm(const Tensor &attention_dense, const Tensor &weight, const Tensor &bias, Tensor &output);
+    void attention(const Tensor &input, Tensor &output);
 
 private:
     SafeTensorLoader tensor_loader;

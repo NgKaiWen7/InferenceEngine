@@ -39,12 +39,14 @@ xlmr: main.cpp \
 xlmr-blas: main.cpp \
 	include/tokenizer/BGEtokenizer.cpp \
 	include/utils/conversion.cpp \
-	include/embedding/embedding.cpp
+	include/embedding/embedding.cpp \
+	include/attention/self_attention.cpp 
 	$(CXX) $(CXXFLAGS) -O3 -march=native -fopenmp \
 	    main.cpp \
 		include/tokenizer/BGEtokenizer.cpp \
 		include/embedding/embedding.cpp \
 	    include/utils/conversion.cpp \
+		include/attention/self_attention.cpp \
 	    -licuuc -licui18n -lsentencepiece -lopenblas -lpthread \
 	    -o main
 
