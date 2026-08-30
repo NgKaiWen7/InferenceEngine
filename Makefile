@@ -40,7 +40,7 @@ xlmr-blas: main.cpp \
 	include/tokenizer/BGEtokenizer.cpp \
 	include/utils/conversion.cpp \
 	include/embedding/embedding.cpp
-	$(CXX) $(CXXFLAGS) -O3 -march=native -fopt-info-vec \
+	$(CXX) $(CXXFLAGS) -O3 -march=native -fopenmp \
 	    main.cpp \
 		include/tokenizer/BGEtokenizer.cpp \
 		include/embedding/embedding.cpp \

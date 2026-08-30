@@ -3,6 +3,7 @@
 #include <stdfloat>
 #include <cstdint>
 #include <bit>
+#include <immintrin.h>
 
 void Embedding::load(const std::string file_path)
 {
@@ -22,28 +23,32 @@ void Embedding::encode(
     constexpr float eps = 1e-5f;
     embeddings.size = token_ids.size() * embedding_dim;
     embeddings.data = new float[embeddings.size];
-
+    #pragma omp parallel for
     for (size_t i = 0; i < token_ids.size(); ++i)
     {
         int token_id = token_ids[i];
         int position_id = i + 2;
 
+        size_t word_idx = token_id * embedding_dim;
+        size_t position_idx = position_id * embedding_dim;
+
+        const float *word = embedding_weights.data + word_idx;
+        const float *position = position_weights.data + position_idx;
+        const float *layernorm_w = layernorm_weight.data;
+        const float *layernorm_b = layernorm_bias.data;
+        
         int start_idx = i * embedding_dim;
-        const float *word = embedding_weights.data + start_idx;
-        const float *position = position_weights.data + start_idx;
-        const float *layernorm_w = layernorm_weight.data + start_idx;
-        const float *layernorm_b = layernorm_bias.data + start_idx;
         float *embedding = embeddings.data + start_idx;
 
         for (size_t j = 0; j < embedding_dim; ++j)
         {
-            embedding[start_idx + j] = word[j] + position[j] + token_type_weights.data[j];
+            embedding[j] = word[j] + position[j] + token_type_weights.data[j];
         }
 
         float mean = 0.0f;
         for (size_t j = 0; j < embedding_dim; ++j)
         {
-            mean += embedding[start_idx + j];
+            mean += embedding[j];
         }
         mean /= embedding_dim;
 
@@ -51,7 +56,7 @@ void Embedding::encode(
 
         for (size_t j = 0; j < embedding_dim; ++j)
         {
-            float diff = embedding[start_idx + j] - mean;
+            float diff = embedding[j] - mean;
             variance += diff * diff;
         }
 

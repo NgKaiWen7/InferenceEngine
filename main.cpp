@@ -16,7 +16,16 @@ int main()
         return 1;
     }
 
-    auto ids = tokenizer.encode("hi, this is a sample sentence");
+auto ids = tokenizer.encode(
+    "This is a longer sample sentence for benchmarking the BGE-M3 inference engine. "
+    "The purpose is to evaluate the performance of tokenisation, embedding generation, "
+    "transformer computation, attention, feed forward layers, layer normalisation, "
+    "and memory access patterns under a more realistic input sequence. "
+    "We want to compare the performance of the baseline C++ implementation against "
+    "an implementation optimised with OpenBLAS and CPU SIMD instructions. "
+    "The input should contain enough tokens to make computational differences measurable "
+    "while remaining representative of typical semantic embedding workloads."
+);
     for (int i : ids)
     {
         std::cout << i << ", ";
