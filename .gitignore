@@ -2,3 +2,6 @@ models/**
 models/qwen3-4B/**
 bge-m3-safetensors/*
 xlm-roberta-base/*
+onnxruntime-gpu/**
+onnxruntime-linux-x64-gpu_cuda13-1.28.0.tgz
+*.o
