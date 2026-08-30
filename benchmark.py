@@ -1,83 +1,66 @@
 import time
-import statistics
+import numpy as np
 import torch
-from transformers import AutoTokenizer, AutoModel
 
-MODEL = "BAAI/bge-m3"
-TEXTS = ["hello tokenization"] * 32
-WARMUP = 10
-RUNS = 100
-MAX_LENGTH = 8192
+M, K, N = 512, 1024, 4096
+WARMUP = 5
+ITERATIONS = 20
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"Device: {device}")
-print(f"Texts: {len(TEXTS)}")
+A = np.random.default_rng(42).uniform(-1, 1, (M, K)).astype(np.float32)
+B = np.random.default_rng(43).uniform(-1, 1, (K, N)).astype(np.float32)
 
-t0 = time.perf_counter()
-tokenizer = AutoTokenizer.from_pretrained(MODEL)
-model = AutoModel.from_pretrained(MODEL)
-model.to(device)
-model.eval()
-load_time = time.perf_counter() - t0
+A_t = torch.from_numpy(A)
+B_t = torch.from_numpy(B)
 
-inputs = tokenizer(
-    TEXTS,
-    padding=True,
-    truncation=True,
-    max_length=MAX_LENGTH,
-    return_tensors="pt",
-)
-inputs = {k: v.to(device) for k, v in inputs.items()}
-print(inputs)
-exit()
+ops = 2.0 * M * N * K
 
-print(f"Model load: {load_time * 1000:.2f} ms")
-print(f"Input shape: {inputs['input_ids'].shape}")
-
-@torch.inference_mode()
-def infer():
-    outputs = model(**inputs)
-    embeddings = outputs.last_hidden_state[:, 0]
-    return embeddings
-
-for _ in range(WARMUP):
-    infer()
-
-if device == "cuda":
-    torch.cuda.synchronize()
-
-latencies = []
-
-for _ in range(RUNS):
-    if device == "cuda":
-        torch.cuda.synchronize()
+def benchmark(fn):
+    for _ in range(WARMUP):
+        fn()
 
     start = time.perf_counter()
-    embeddings = infer()
+    for _ in range(ITERATIONS):
+        C = fn()
+    elapsed = (time.perf_counter() - start) / ITERATIONS
 
-    if device == "cuda":
-        torch.cuda.synchronize()
+    gflops = ops / elapsed / 1e9
+    return elapsed * 1000, gflops, C
 
-    latencies.append(time.perf_counter() - start)
+def numpy_benchmark():
+    for threads in [1, 2, 4, 8, 12, 16, 20]:
+        import os
+        os.environ["OPENBLAS_NUM_THREADS"] = str(threads)
 
-mean_ms = statistics.mean(latencies) * 1000
-median_ms = statistics.median(latencies) * 1000
-p95_ms = sorted(latencies)[int(RUNS * 0.95) - 1] * 1000
-min_ms = min(latencies) * 1000
-max_ms = max(latencies) * 1000
+        for _ in range(WARMUP):
+            C = A @ B
 
-print()
-print("=== BGE-M3 Benchmark ===")
-print(f"Device:       {device}")
-print(f"Batch size:   {len(TEXTS)}")
-print(f"Runs:         {RUNS}")
-print(f"Embedding:    {tuple(embeddings.shape)}")
-print(f"Min:          {min_ms:.2f} ms")
-print(f"Mean:         {mean_ms:.2f} ms")
-print(f"Median:       {median_ms:.2f} ms")
-print(f"P95:          {p95_ms:.2f} ms")
-print(f"Max:          {max_ms:.2f} ms")
-print(f"Throughput:   {len(TEXTS) / (mean_ms / 1000):.2f} texts/sec")
+        start = time.perf_counter()
+        for _ in range(ITERATIONS):
+            C = A @ B
+        elapsed = (time.perf_counter() - start) / ITERATIONS
 
-if device == "cuda":
-    print(f"GPU memory:   {torch.cuda.max_memory_allocated() / 1024**3:.2f} GB")
+        gflops = ops / elapsed / 1e9
+        print(f"NumPy {threads:2d} threads: {elapsed*1000:8.3f} ms  {gflops:8.2f} GFLOP/s")
+
+print(f"M={M}, K={K}, N={N}\n")
+
+torch.set_num_threads(1)
+
+ms, gflops, C = benchmark(lambda: torch.mm(A_t, B_t))
+print("PyTorch CPU - 1 thread:")
+print(f"  {ms:.3f} ms")
+print(f"  {gflops:.2f} GFLOP/s")
+print(f"  C[0,0] = {C[0,0].item():.6f}\n")
+torch.set_num_threads(8)
+
+ms, gflops, C = benchmark(lambda: torch.mm(A_t, B_t))
+print("PyTorch CPU - 8 threads:")
+print(f"  {ms:.3f} ms")
+print(f"  {gflops:.2f} GFLOP/s")
+print(f"  C[0,0] = {C[0,0].item():.6f}\n")
+
+for threads in [1, 2, 4, 8, 12, 16, 20]:
+    torch.set_num_threads(threads)
+    ms, gflops, _ = benchmark(lambda: torch.mm(A_t, B_t))
+    print(f"PyTorch {threads:2d} threads: {ms:8.3f} ms  {gflops:8.2f} GFLOP/s")
+numpy_benchmark()

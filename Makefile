@@ -21,19 +21,31 @@ include/attention/casual_attention.cpp
 	    -o main
 		
 xlmr: main.cpp \
+	include-old/tokenizer/BGEtokenizer.cpp \
+	include-old/utils/conversion.cpp \
+	include-old/embedding/embedding.cpp \
+	include-old/attention/self_attention.cpp \
+	include-old/pooler/pooler.cpp
+	$(CXX) $(CXXFLAGS) \
+	    main.cpp \
+		include-old/tokenizer/BGEtokenizer.cpp \
+		include-old/embedding/embedding.cpp \
+	    include-old/utils/conversion.cpp \
+		include-old/attention/self_attention.cpp \
+		include-old/pooler/pooler.cpp \
+	    -licuuc -licui18n -lsentencepiece \
+	    -o main
+
+xlmr-blas: main.cpp \
 	include/tokenizer/BGEtokenizer.cpp \
 	include/utils/conversion.cpp \
-	include/embedding/embedding.cpp \
-	include/attention/self_attention.cpp \
-	include/pooler/pooler.cpp
-	$(CXX) $(CXXFLAGS) \
+	include/embedding/embedding.cpp
+	$(CXX) $(CXXFLAGS) -O3 -march=native -fopt-info-vec \
 	    main.cpp \
 		include/tokenizer/BGEtokenizer.cpp \
 		include/embedding/embedding.cpp \
 	    include/utils/conversion.cpp \
-		include/attention/self_attention.cpp \
-		include/pooler/pooler.cpp \
-	    -licuuc -licui18n -lsentencepiece \
+	    -licuuc -licui18n -lsentencepiece -lopenblas -lpthread \
 	    -o main
 
 safetensor_loader:

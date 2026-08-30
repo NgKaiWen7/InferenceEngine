@@ -1,1 +1,1 @@
-float bf16_to_float(uint16_t value);
+void to_float(const char *src, float *params, size_t size);

@@ -1,9 +1,14 @@
 #include <bit>
 #include <cstdint>
+#include "safetensors.hpp"
+#include <stdfloat>
 
-float bf16_to_float(uint16_t value)
+void to_float(const char *src, float *params, size_t size)
 {
-    uint32_t bits = static_cast<uint32_t>(value) << 16;
+    const uint16_t *fp16 = reinterpret_cast<const uint16_t *>(src);
 
-    return std::bit_cast<float>(bits);
+    for (size_t i = 0; i < size; ++i)
+        params[i] = static_cast<float>(
+            std::bit_cast<std::float16_t>(fp16[i])
+        );
 }

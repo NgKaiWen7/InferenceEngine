@@ -12,6 +12,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "utils/conversion.hpp"
 
 struct Tensor
 {
@@ -23,7 +24,8 @@ struct Tensor
     uint64_t start;
     uint64_t end;
 
-    char *data;
+    char *raw_data;
+    float *data;
     size_t size;
 };
 
@@ -104,55 +106,33 @@ public:
     {
         if (!metadata.contains(name))
             throw std::runtime_error("Tensor not found: " + name);
+
         auto json = metadata[name];
+
         Tensor tensor;
+
         tensor.name = name;
         tensor.dtype = json["dtype"];
         tensor.shape = json["shape"].get<std::vector<int64_t>>();
+
         tensor.start = json["data_offsets"][0].get<uint64_t>();
         tensor.end = json["data_offsets"][1].get<uint64_t>();
+
         tensor.size = tensor.end - tensor.start;
-        tensor.data = static_cast<char *>(mapped) + data_offset + tensor.start;
-        // std::cout << "dtype: " << tensor.dtype << '\n';
-        // std::cout << "start: " << tensor.start << '\n';
-        // std::cout << "end: " << tensor.end << '\n';
-        // std::cout << "size: " << tensor.size << '\n';
-        // std::cout << "data_offset: " << data_offset << '\n';
+
+        tensor.raw_data =
+            static_cast<char *>(mapped) + data_offset + tensor.start;
+
+        size_t elements = tensor.size / sizeof(uint16_t);
+
+        tensor.data = new float[elements];
+
+        to_float(
+            tensor.raw_data,
+            tensor.data,
+            elements);
+
         return tensor;
-    }
-
-    std::vector<Tensor> load_all_tensors()
-    {
-        std::vector<Tensor> tensors;
-
-        for (auto &item : metadata.items())
-        {
-            if (item.key() == "__metadata__")
-            {
-                std::cout << item.key();
-                continue;
-            }
-            Tensor tensor;
-            tensor.name = item.key();
-            tensor.dtype = item.value()["dtype"].get<std::string>();
-            for (auto &dim : item.value()["shape"])
-            {
-                tensor.shape.push_back(dim.get<int64_t>());
-            }
-            uint64_t start = item.value()["data_offsets"][0].get<uint64_t>();
-            uint64_t end = item.value()["data_offsets"][1].get<uint64_t>();
-            tensor.size = end - start;
-            tensor.data = static_cast<char *>(mapped) + data_offset + start;
-
-            // tensor.data = malloc(tensor.size);
-            // memcpy(tensor.data, static_cast<char *>(mapped) + data_offset + start, tensor.size);
-
-            std::cout << "Tensor name: " << tensor.name << std::endl;
-            std::cout << "Tensor size: " << tensor.size << std::endl;
-            std::cout << "Tensor type: " << tensor.dtype << std::endl;
-            tensors.push_back(tensor);
-        }
-        return tensors;
     }
 
     nlohmann::json &get_metadata()

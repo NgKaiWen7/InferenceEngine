@@ -1,6 +1,6 @@
 #include "attention/self_attention.hpp"
 #include "safetensors.hpp"
-#include "safetensors.hpp"
+#include "utils/conversion.hpp"
 #include <stdfloat>
 #include <cstdint>
 #include <bit>
@@ -16,61 +16,35 @@ void TransformerLayer::load(const std::string &file_path, int layer)
 
     std::string prefix = "encoder.layer." + std::to_string(layer) + ".";
 
-    Tensor t;
+    attention_query_weight = tensor_loader.get_tensor(prefix + "attention.self.query.weight");
+    attention_query_bias = tensor_loader.get_tensor(prefix + "attention.self.query.bias");
 
-    t = tensor_loader.get_tensor(prefix + "attention.self.query.weight");
-    attention_query_weight = reinterpret_cast<uint16_t *>(t.data);
+    attention_key_weight = tensor_loader.get_tensor(prefix + "attention.self.key.weight");
+    attention_key_bias = tensor_loader.get_tensor(prefix + "attention.self.key.bias");
 
-    t = tensor_loader.get_tensor(prefix + "attention.self.query.bias");
-    attention_query_bias = reinterpret_cast<uint16_t *>(t.data);
+    attention_value_weight = tensor_loader.get_tensor(prefix + "attention.self.value.weight");
+    attention_value_bias = tensor_loader.get_tensor(prefix + "attention.self.value.bias");
 
-    t = tensor_loader.get_tensor(prefix + "attention.self.key.weight");
-    attention_key_weight = reinterpret_cast<uint16_t *>(t.data);
+    attention_output_weight = tensor_loader.get_tensor(prefix + "attention.output.dense.weight");
+    attention_output_bias = tensor_loader.get_tensor(prefix + "attention.output.dense.bias");
 
-    t = tensor_loader.get_tensor(prefix + "attention.self.key.bias");
-    attention_key_bias = reinterpret_cast<uint16_t *>(t.data);
+    attention_layernorm_weight = tensor_loader.get_tensor(prefix + "attention.output.LayerNorm.weight");
+    attention_layernorm_bias = tensor_loader.get_tensor(prefix + "attention.output.LayerNorm.bias");
 
-    t = tensor_loader.get_tensor(prefix + "attention.self.value.weight");
-    attention_value_weight = reinterpret_cast<uint16_t *>(t.data);
+    intermediate_weight = tensor_loader.get_tensor(prefix + "intermediate.dense.weight");
+    intermediate_bias = tensor_loader.get_tensor(prefix + "intermediate.dense.bias");
 
-    t = tensor_loader.get_tensor(prefix + "attention.self.value.bias");
-    attention_value_bias = reinterpret_cast<uint16_t *>(t.data);
+    output_weight = tensor_loader.get_tensor(prefix + "output.dense.weight");
+    output_bias = tensor_loader.get_tensor(prefix + "output.dense.bias");
 
-    t = tensor_loader.get_tensor(prefix + "attention.output.dense.weight");
-    attention_output_weight = reinterpret_cast<uint16_t *>(t.data);
-
-    t = tensor_loader.get_tensor(prefix + "attention.output.dense.bias");
-    attention_output_bias = reinterpret_cast<uint16_t *>(t.data);
-
-    t = tensor_loader.get_tensor(prefix + "attention.output.LayerNorm.weight");
-    attention_layernorm_weight = reinterpret_cast<uint16_t *>(t.data);
-
-    t = tensor_loader.get_tensor(prefix + "attention.output.LayerNorm.bias");
-    attention_layernorm_bias = reinterpret_cast<uint16_t *>(t.data);
-
-    t = tensor_loader.get_tensor(prefix + "intermediate.dense.weight");
-    intermediate_weight = reinterpret_cast<uint16_t *>(t.data);
-
-    t = tensor_loader.get_tensor(prefix + "intermediate.dense.bias");
-    intermediate_bias = reinterpret_cast<uint16_t *>(t.data);
-
-    t = tensor_loader.get_tensor(prefix + "output.dense.weight");
-    output_weight = reinterpret_cast<uint16_t *>(t.data);
-
-    t = tensor_loader.get_tensor(prefix + "output.dense.bias");
-    output_bias = reinterpret_cast<uint16_t *>(t.data);
-
-    t = tensor_loader.get_tensor(prefix + "output.LayerNorm.weight");
-    output_layernorm_weight = reinterpret_cast<uint16_t *>(t.data);
-
-    t = tensor_loader.get_tensor(prefix + "output.LayerNorm.bias");
-    output_layernorm_bias = reinterpret_cast<uint16_t *>(t.data);
+    output_layernorm_weight = tensor_loader.get_tensor(prefix + "output.LayerNorm.weight");
+    output_layernorm_bias = tensor_loader.get_tensor(prefix + "output.LayerNorm.bias");
 }
 
 void TransformerLayer::linear(
     const std::vector<std::vector<float>> &input,
-    const uint16_t *weight,
-    const uint16_t *bias,
+    const Tensor weight,
+    const Tensor bias,
     int input_size,
     int output_size,
     std::vector<std::vector<float>> &output)
@@ -85,15 +59,12 @@ void TransformerLayer::linear(
 
             for (int k = 0; k < input_size; k++)
             {
-                float w = static_cast<float>(
-                    std::bit_cast<std::float16_t>(
-                        weight[j * input_size + k]));
+                float w = static_cast<float>(weight[j * input_size + k]);
 
                 sum += input[i][k] * w;
             }
 
-            float b = static_cast<float>(
-                std::bit_cast<std::float16_t>(bias[j]));
+            float b = static_cast<float>(bias[j]);
 
             row[j] = sum + b;
         }
@@ -104,8 +75,8 @@ void TransformerLayer::linear(
 
 void TransformerLayer::layer_norm(
     const std::vector<std::vector<float>> &input,
-    const uint16_t *weight,
-    const uint16_t *bias,
+    const Tensor weight,
+    const Tensor bias,
     std::vector<std::vector<float>> &output)
 {
     constexpr float eps = 1e-5f;
@@ -135,11 +106,9 @@ void TransformerLayer::layer_norm(
 
         for (size_t j = 0; j < row.size(); ++j)
         {
-            float gamma = static_cast<float>(
-                std::bit_cast<std::float16_t>(weight[j]));
+            float gamma = static_cast<float>(weight[j]);
 
-            float beta = static_cast<float>(
-                std::bit_cast<std::float16_t>(bias[j]));
+            float beta = static_cast<float>(bias[j]);
 
             normalized[j] =
                 (row[j] - mean) * inv_std * gamma + beta;
@@ -276,5 +245,4 @@ void TransformerLayer::attention(
         output_layernorm_weight,
         output_layernorm_bias,
         output);
-
 }

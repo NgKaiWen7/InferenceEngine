@@ -9,8 +9,7 @@ class Embedding
 {
 public:
     void load(const std::string file_path);
-    void encode(const std::vector<int> &token_ids, std::vector<std::vector<float>> &embedding_vector);
-    void get_embedding(const int token_id, std::vector<std::float16_t> &output);
+    void encode(const std::vector<int> &token_ids, Tensor embeddings);
 
 private:
     int embedding_dim;
@@ -23,10 +22,10 @@ private:
     int token_type_size;
 
     SafeTensorLoader tensor_loader;
-    uint16_t *embedding_weights;
-    uint16_t *position_weights;
-    uint16_t *token_type_weights;
+    Tensor embedding_weights;
+    Tensor position_weights;
+    Tensor token_type_weights;
 
-    uint16_t *layernorm_weight;
-    uint16_t *layernorm_bias;
+    Tensor layernorm_weight;
+    Tensor layernorm_bias;
 };
