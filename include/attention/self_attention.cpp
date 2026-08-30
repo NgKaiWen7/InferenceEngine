@@ -147,6 +147,7 @@ void TransformerLayer::attention(const Tensor &input, Tensor &output)
     context.size = sequence_length * hidden_size;
     context.data = new float[context.size];
 
+    #pragma omp parallel for
     for (int h = 0; h < num_heads; h++)
     {
         int offset = h * head_dim;
@@ -238,6 +239,5 @@ void TransformerLayer::attention(const Tensor &input, Tensor &output)
         output_residual.data[i] = output_dense.data[i] + attention_output.data[i];
 
     layer_norm(output_residual, output_layernorm_weight, output_layernorm_bias, output);
-    for (int j = 0; j < 3; ++j)
-        std::cout << output.data[j] << ", ";
+
 }

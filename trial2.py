@@ -1,16 +1,18 @@
-import torch
 from sentence_transformers import SentenceTransformer
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
 TEXT_ENCODER = SentenceTransformer(
-    "BAAI/bge-m3",
-    device=device,
+    "BAAI/bge-m3"
 )
-print(TEXT_ENCODER)
 
 texts = [
-    "b"
+        "This is a longer sample sentence for benchmarking the BGE-M3 inference engine. "
+        "The purpose is to evaluate the performance of tokenisation, embedding generation, "
+        "transformer computation, attention, feed forward layers, layer normalisation, "
+        "and memory access patterns under a more realistic input sequence. "
+        "We want to compare the performance of the baseline C++ implementation against "
+        "an implementation optimised with OpenBLAS and CPU SIMD instructions. "
+        "The input should contain enough tokens to make computational differences measurable "
+        "while remaining representative of typical semantic embedding workloads."
 ]
 
 import time
@@ -19,8 +21,7 @@ start = time.perf_counter()
 
 embeddings = TEXT_ENCODER.encode(
     texts,
-    normalize_embeddings=True,
-    batch_size=8,
+    normalize_embeddings=True
 )
 
 elapsed = time.perf_counter() - start

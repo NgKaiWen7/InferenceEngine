@@ -12,8 +12,8 @@ void Embedding::load(const std::string file_path)
     embedding_dim = embedding_weights.shape[1];
     position_weights = tensor_loader.get_tensor("embeddings.position_embeddings.weight");
     token_type_weights = tensor_loader.get_tensor("embeddings.token_type_embeddings.weight");
-    layernorm_weight = tensor_loader.get_tensor("embeddings.LayerNorm.bias");
-    layernorm_bias = tensor_loader.get_tensor("embeddings.LayerNorm.weight");
+    layernorm_weight = tensor_loader.get_tensor("embeddings.LayerNorm.weight");
+    layernorm_bias = tensor_loader.get_tensor("embeddings.LayerNorm.bias");
 }
 
 void Embedding::encode(
@@ -47,19 +47,18 @@ void Embedding::encode(
             mean += embedding[j];
 
         mean /= embedding_dim;
-
+        
         float variance = 0.0f;
-
+        
         for (size_t j = 0; j < embedding_dim; ++j)
         {
             float diff = embedding[j] - mean;
             variance += diff * diff;
         }
-
+        
         variance /= embedding_dim;
-
+        
         float inv_std = 1.0f / std::sqrt(variance + eps);
-
         for (size_t j = 0; j < embedding_dim; ++j)
             embedding[j] = (embedding[j] - mean) * inv_std * layernorm_w[j] + layernorm_b[j];
     }

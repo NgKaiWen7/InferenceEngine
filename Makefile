@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++23 -O2 -Iinclude
+CXXFLAGS = -std=c++23 -Iinclude
 
 tokenizer: clean tokenizer.cpp include/tokenizer/UnicodeEncoder.cpp include/tokenizer/BPE.cpp
 	$(CXX) $(CXXFLAGS) tokenizer.cpp include/tokenizer/UnicodeEncoder.cpp include/tokenizer/BPE.cpp -licuuc -licui18n -o tokenizer
@@ -36,19 +36,15 @@ xlmr: main.cpp \
 	    -licuuc -licui18n -lsentencepiece \
 	    -o main
 
-xlmr-blas: main.cpp \
-	include/tokenizer/BGEtokenizer.cpp \
-	include/utils/conversion.cpp \
-	include/embedding/embedding.cpp \
-	include/attention/self_attention.cpp 
+xlmr-blas: main.cpp
 	$(CXX) $(CXXFLAGS) -O3 -march=native -fopenmp \
-	    main.cpp \
+		main.cpp \
 		include/tokenizer/BGEtokenizer.cpp \
 		include/embedding/embedding.cpp \
-	    include/utils/conversion.cpp \
+		include/utils/conversion.cpp \
 		include/attention/self_attention.cpp \
-	    -licuuc -licui18n -lsentencepiece -lopenblas -lpthread \
-	    -o main
+		-licuuc -licui18n -lsentencepiece -lopenblas -lpthread \
+		-o main
 
 safetensor_loader:
 	$(CXX) $(CXXFLAGS) safe_tensor.cpp -o safe_tensor
