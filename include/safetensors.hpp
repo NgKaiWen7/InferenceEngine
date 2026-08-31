@@ -24,9 +24,20 @@ struct Tensor
     uint64_t start;
     uint64_t end;
 
-    char *raw_data;
-    float *data;
-    size_t size;
+    float *data = nullptr;
+    size_t size = 0;
+
+    void allocate(const std::vector<int64_t> &new_shape)
+    {
+        shape = new_shape;
+
+        size = 1;
+        for (int64_t dim : shape)
+            size *= dim;
+
+        delete[] data;
+        data = new float[size];
+    }
 };
 
 class SafeTensorLoader
@@ -120,7 +131,7 @@ public:
 
         tensor.size = tensor.end - tensor.start;
 
-        tensor.raw_data =
+        char* raw_data =
             static_cast<char *>(mapped) + data_offset + tensor.start;
 
         size_t elements = tensor.size / sizeof(uint16_t);
@@ -128,7 +139,7 @@ public:
         tensor.data = new float[elements];
 
         to_float(
-            tensor.raw_data,
+            raw_data,
             tensor.data,
             elements);
 

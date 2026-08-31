@@ -5,3 +5,4 @@ float sum_avx2(const float *x, size_t n);
 void gelu(Tensor &values);
 void residual(Tensor &current_layers, const Tensor &previous_layers);
 void layer_norm(Tensor &input, const Tensor &weight, const Tensor &bias);
+void linear2(const Tensor &input, const Tensor &weight, const Tensor &bias, Tensor &output);

@@ -43,10 +43,6 @@ void TransformerLayer::linear(const Tensor &input, const Tensor &weight, const T
     size_t M = input.shape[0];
     size_t K = input.shape[1];
     size_t N = weight.shape[0];
-    output.size = M * N;
-    output.shape = {static_cast<int64_t>(M), static_cast<int64_t>(N)};
-    output.data = new float[output.size];
-
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, M, N, K, 1.0f, input.data, K, weight.data, K, 0.0f, output.data, N);
 
     for (size_t i = 0; i < M; ++i)
@@ -54,35 +50,31 @@ void TransformerLayer::linear(const Tensor &input, const Tensor &weight, const T
             output.data[i * N + j] += bias.data[j];
 }
 
-
-void TransformerLayer::attention(const Tensor &input, Tensor &output)
+void TransformerLayer::attention(const Tensor &input, Tensor &output, TransformerWorkspace &workspace)
 {
-    constexpr int hidden_size = 1024;
-    constexpr int num_heads = 16;
-    constexpr int head_dim = 64;
+    auto inputstart = std::chrono::high_resolution_clock::now();
 
     size_t sequence_length = input.shape[0];
-
-    Tensor value;
+    Tensor &query = workspace.query;
+    Tensor &value = workspace.value;
+    Tensor &key = workspace.key;
     linear(input, attention_value_weight, attention_value_bias, value);
-    Tensor query;
     linear(input, attention_query_weight, attention_query_bias, query);
-    Tensor key;
     linear(input, attention_key_weight, attention_key_bias, key);
+    
+    auto inputend = std::chrono::high_resolution_clock::now();
+    double inputtotal = std::chrono::duration<double, std::milli>(inputend - inputstart).count();
+    std::cout << "Input operations: " << inputtotal << " ms\n";
+    
+    auto start = std::chrono::high_resolution_clock::now();
+    Tensor &scores = workspace.scores;
+    Tensor &context = workspace.context;
 
-    Tensor context;
-    context.shape = {static_cast<int64_t>(sequence_length), hidden_size};
-    context.size = sequence_length * hidden_size;
-    context.data = new float[context.size];
-
+    #pragma omp parallel for
     for (int h = 0; h < num_heads; h++)
     {
         int offset = h * head_dim;
-
-        Tensor scores;
-        scores.shape = {static_cast<int64_t>(sequence_length), static_cast<int64_t>(sequence_length)};
-        scores.size = sequence_length * sequence_length;
-        scores.data = new float[scores.size];
+        int score_offset = h * sequence_length * sequence_length;
 
         for (size_t i = 0; i < sequence_length; i++)
         {
@@ -94,13 +86,13 @@ void TransformerLayer::attention(const Tensor &input, Tensor &output)
                 {
                     sum += query.data[offset + i * hidden_size + k] * key.data[offset + j * hidden_size + k];
                 }
-                scores.data[i * sequence_length + j] = sum / std::sqrt(static_cast<float>(head_dim));
+                scores.data[score_offset + i * sequence_length + j] = sum / std::sqrt(static_cast<float>(head_dim));
             }
         }
 
         for (size_t i = 0; i < sequence_length; ++i)
         {
-            float *row = scores.data + i * sequence_length;
+            float *row = scores.data + score_offset + i * sequence_length;
 
             float max_value = row[0];
 
@@ -127,85 +119,93 @@ void TransformerLayer::attention(const Tensor &input, Tensor &output)
                 float sum = 0.0f;
 
                 for (size_t j = 0; j < sequence_length; j++)
-                    sum += scores.data[i * sequence_length + j] * value.data[offset + j * hidden_size + k];
+                    sum += scores.data[score_offset + i * sequence_length + j] * value.data[offset + j * hidden_size + k];
                 context.data[offset + i * hidden_size + k] = sum;
             }
         }
     }
+    auto end = std::chrono::high_resolution_clock::now();
+    double total = std::chrono::duration<double, std::milli>(end - start).count();
+    std::cout << "Head operations: " << total << " ms\n";
+start = std::chrono::high_resolution_clock::now();
 
-using Clock = std::chrono::steady_clock;
-
-auto start = Clock::now();
-Tensor attention_dense;
+Tensor &attention_dense = workspace.attention_dense;
 linear(context, attention_output_weight, attention_output_bias, attention_dense);
-auto end = Clock::now();
-std::cout << "Attention output Linear: "
+
+end = std::chrono::high_resolution_clock::now();
+std::cout << "Attention output linear: "
           << std::chrono::duration<double, std::milli>(end - start).count()
           << " ms\n";
 
 
-start = Clock::now();
+start = std::chrono::high_resolution_clock::now();
+
 residual(attention_dense, input);
-end = Clock::now();
-std::cout << "Attention Residual:       "
+
+end = std::chrono::high_resolution_clock::now();
+std::cout << "Residual 1: "
           << std::chrono::duration<double, std::milli>(end - start).count()
           << " ms\n";
 
 
-start = Clock::now();
+start = std::chrono::high_resolution_clock::now();
+
 layer_norm(attention_dense, attention_layernorm_weight, attention_layernorm_bias);
-end = Clock::now();
-std::cout << "Attention LayerNorm:      "
+
+end = std::chrono::high_resolution_clock::now();
+std::cout << "LayerNorm 1: "
           << std::chrono::duration<double, std::milli>(end - start).count()
           << " ms\n";
 
 
-start = Clock::now();
-Tensor intermediate;
+Tensor &intermediate = workspace.intermediate;
+
+start = std::chrono::high_resolution_clock::now();
+
 linear(attention_dense, intermediate_weight, intermediate_bias, intermediate);
-end = Clock::now();
-std::cout << "FFN Linear 1:             "
+
+end = std::chrono::high_resolution_clock::now();
+std::cout << "Intermediate linear: "
           << std::chrono::duration<double, std::milli>(end - start).count()
           << " ms\n";
 
 
-start = Clock::now();
+start = std::chrono::high_resolution_clock::now();
+
 gelu(intermediate);
-end = Clock::now();
-std::cout << "GELU:                     "
+
+end = std::chrono::high_resolution_clock::now();
+std::cout << "GELU: "
           << std::chrono::duration<double, std::milli>(end - start).count()
           << " ms\n";
 
 
-start = Clock::now();
-Tensor output_dense;
-linear(intermediate, output_weight, output_bias, output_dense);
-end = Clock::now();
-std::cout << "FFN Linear 2:             "
+start = std::chrono::high_resolution_clock::now();
+
+linear(intermediate, output_weight, output_bias, output);
+
+end = std::chrono::high_resolution_clock::now();
+std::cout << "Output linear: "
           << std::chrono::duration<double, std::milli>(end - start).count()
           << " ms\n";
 
 
-start = Clock::now();
-residual(output_dense, attention_dense);
-end = Clock::now();
-std::cout << "FFN Residual:              "
+start = std::chrono::high_resolution_clock::now();
+
+residual(output, attention_dense);
+
+end = std::chrono::high_resolution_clock::now();
+std::cout << "Residual 2: "
           << std::chrono::duration<double, std::milli>(end - start).count()
           << " ms\n";
 
 
-start = Clock::now();
-layer_norm(output_dense, output_layernorm_weight, output_layernorm_bias);
-end = Clock::now();
-std::cout << "Output LayerNorm:          "
-          << std::chrono::duration<double, std::milli>(end - start).count()
-          << " ms\n";
+start = std::chrono::high_resolution_clock::now();
 
+layer_norm(output, output_layernorm_weight, output_layernorm_bias);
 
-start = Clock::now();
-output = output_dense;
-end = Clock::now();
-std::cout << "Output Copy:               "
+end = std::chrono::high_resolution_clock::now();
+std::cout << "LayerNorm 2: "
           << std::chrono::duration<double, std::milli>(end - start).count()
           << " ms\n";
 }
