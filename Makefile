@@ -42,6 +42,7 @@ xlmr-blas: main.cpp
 		include/tokenizer/BGEtokenizer.cpp \
 		include/embedding/embedding.cpp \
 		include/utils/conversion.cpp \
+		include/utils/immitrin.cpp \
 		include/attention/self_attention.cpp \
 		-licuuc -licui18n -lsentencepiece -lopenblas -lpthread \
 		-o main

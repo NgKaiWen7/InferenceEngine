@@ -40,7 +40,7 @@ int main()
     embedding_vector.data = new float[embedding_vector.size];
 
     embedding.encode(token_ids, embedding_vector);
-    for (int layer = 0; layer < 24; ++layer)
+    for (int layer = 0; layer < 1; ++layer)
     {
         Tensor next_output;
         layers[layer].attention(embedding_vector, next_output);
@@ -62,5 +62,5 @@ int main()
 
     auto end = std::chrono::high_resolution_clock::now();
     double total = std::chrono::duration<double, std::milli>(end - start).count();
-    std::cout << "Average: " << total << " ms\n";
+    std::cout << "Total: " << total << " ms\n";
 }

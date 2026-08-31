@@ -10,7 +10,6 @@ class TransformerLayer
 public:
     void load(const std::string &file_path, int layer);
     void linear(const Tensor &input, const Tensor &weight, const Tensor &bias, Tensor &output);
-    void layer_norm(const Tensor &attention_dense, const Tensor &weight, const Tensor &bias, Tensor &output);
     void attention(const Tensor &input, Tensor &output);
 
 private:
