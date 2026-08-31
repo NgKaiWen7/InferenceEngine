@@ -24,7 +24,8 @@ start = time.perf_counter()
 
 embeddings = TEXT_ENCODER.encode(
     texts,
-    normalize_embeddings=True
+    normalize_embeddings=True,
+    device="cpu"
 )
 
 encode_time = time.perf_counter() - start

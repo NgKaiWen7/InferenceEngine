@@ -1,89 +1,137 @@
 #include <cblas.h>
 #include <chrono>
+#include <cstdio>
+#include <cstring>
 #include <iostream>
-#include <random>
+#include <cstdint>
 #include <vector>
 
-void matmul_naive(const float *A, const float *B, float *C, int M, int K, int N)
+struct Tensor
 {
-    for (int i = 0; i < M; ++i)
-        for (int j = 0; j < N; ++j)
-        {
-            float sum = 0.0f;
-            for (int k = 0; k < K; ++k)
-                sum += A[i * K + k] * B[k * N + j];
-            C[i * N + j] = sum;
-        }
+    float *data = nullptr;
+    size_t size = 0;
+    std::vector<int64_t> shape;
+};
+
+void linear(const Tensor &input, const Tensor &weight, const Tensor &bias, Tensor &output)
+{
+    size_t M = input.shape[0];
+    size_t K = input.shape[1];
+    size_t N = weight.shape[0];
+
+    auto start = std::chrono::steady_clock::now();
+
+    cblas_sgemm(
+        CblasRowMajor,
+        CblasNoTrans,
+        CblasTrans,
+        M, N, K,
+        1.0f,
+        input.data, K,
+        weight.data, K,
+        0.0f,
+        output.data, N
+    );
+
+    auto end = std::chrono::steady_clock::now();
+
+    double ms = std::chrono::duration<double, std::milli>(end - start).count();
+
+    double gflops = (2.0 * M * N * K) / (ms * 1e6);
+
+    std::cout << "GEMM: "
+              << ms << " ms | "
+              << gflops << " GFLOP/s\n";
 }
 
-void matmul_blas(const float *A, const float *B, float *C, int M, int K, int N)
+Tensor make_tensor(size_t rows, size_t cols)
 {
-    cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K, 1.0f, A, K, B, N, 0.0f, C, N);
+    Tensor t;
+
+    t.shape = {
+        static_cast<int64_t>(rows),
+        static_cast<int64_t>(cols)
+    };
+
+    t.size = rows * cols;
+    t.data = new float[t.size];
+
+    for (size_t i = 0; i < t.size; ++i)
+        t.data[i] = 0.01f;
+
+    return t;
 }
 
-template <typename Func>
-double benchmark(Func func, int iterations)
+Tensor make_vector(size_t size)
 {
-    auto start = std::chrono::high_resolution_clock::now();
+    Tensor t;
 
-    for (int i = 0; i < iterations; ++i)
-        func();
+    t.shape = {static_cast<int64_t>(size)};
+    t.size = size;
+    t.data = new float[t.size];
 
-    auto end = std::chrono::high_resolution_clock::now();
+    for (size_t i = 0; i < t.size; ++i)
+        t.data[i] = 0.01f;
 
-    return std::chrono::duration<double>(end - start).count() / iterations;
+    return t;
 }
 
 int main()
 {
-    const int M = 512;
-    const int K = 1024;
-    const int N = 4096;
+    const size_t M = 130;
+    const size_t K = 1024;
+    const size_t N = 1024;
 
-    const int warmup = 3;
-    const int iterations = 20;
+    Tensor input = make_tensor(M, K);
+    Tensor weight = make_tensor(N, K);
+    Tensor bias = make_vector(N);
+    Tensor output = make_tensor(M, N);
 
-    std::vector<float> A(M * K);
-    std::vector<float> B(K * N);
-    std::vector<float> C(M * N);
+    std::cout
+        << "Input:  [" << input.shape[0] << ", " << input.shape[1] << "]\n"
+        << "Weight: [" << weight.shape[0] << ", " << weight.shape[1] << "]\n"
+        << "Bias:   [" << bias.shape[0] << "]\n"
+        << "Output: [" << output.shape[0] << ", " << output.shape[1] << "]\n";
 
-    std::mt19937 gen(42);
-    std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+    std::cout << "\nMemory:\n";
 
-    for (auto &x : A)
-        x = dist(gen);
-    for (auto &x : B)
-        x = dist(gen);
+    std::cout
+        << "input  = " << static_cast<void*>(input.data)
+        << " alignment=" << (reinterpret_cast<uintptr_t>(input.data) % 64)
+        << '\n';
 
-    for (int i = 0; i < warmup; ++i)
-        matmul_naive(A.data(), B.data(), C.data(), M, K, N);
+    std::cout
+        << "weight = " << static_cast<void*>(weight.data)
+        << " alignment=" << (reinterpret_cast<uintptr_t>(weight.data) % 64)
+        << '\n';
 
-    double naive = benchmark([&]
-                             { matmul_naive(A.data(), B.data(), C.data(), M, K, N); }, iterations);
+    std::cout
+        << "bias   = " << static_cast<void*>(bias.data)
+        << " alignment=" << (reinterpret_cast<uintptr_t>(bias.data) % 64)
+        << '\n';
 
-    for (int i = 0; i < warmup; ++i)
-        matmul_blas(A.data(), B.data(), C.data(), M, K, N);
+    std::cout
+        << "output = " << static_cast<void*>(output.data)
+        << " alignment=" << (reinterpret_cast<uintptr_t>(output.data) % 64)
+        << '\n';
 
-    double blas = benchmark([&]
-                            { matmul_blas(A.data(), B.data(), C.data(), M, K, N); }, iterations);
+    std::cout << "\nWarmup:\n";
 
-    double operations = 2.0 * M * N * K;
+    for (int i = 0; i < 10; ++i)
+        linear(input, weight, bias, output);
 
-    std::cout << "M = " << M
-              << ", K = " << K
-              << ", N = " << N << "\n\n";
+    std::cout << "\nBenchmark:\n";
 
-    std::cout << "Naive C++:\n";
-    std::cout << "  " << naive * 1000.0 << " ms\n";
-    std::cout << "  " << operations / naive / 1e9 << " GFLOP/s\n\n";
+    for (int i = 0; i < 20; ++i)
+    {
+        std::cout << i << ": ";
+        linear(input, weight, bias, output);
+    }
 
-    std::cout << "OpenBLAS:\n";
-    std::cout << "  " << blas * 1000.0 << " ms\n";
-    std::cout << "  " << operations / blas / 1e9 << " GFLOP/s\n\n";
+    delete[] input.data;
+    delete[] weight.data;
+    delete[] bias.data;
+    delete[] output.data;
 
-    std::cout << "BLAS speedup: "
-              << naive / blas
-              << "x\n";
-
-    std::cout << "C[0] = " << C[0] << "\n";
+    return 0;
 }

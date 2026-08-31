@@ -169,3 +169,23 @@ void layer_norm(Tensor &input, const Tensor &weight, const Tensor &bias)
             row[i] = weight.data[i] * row[i] + bias.data[i];
     }
 }
+
+void gemm_avx2(const float *A, const float *B, float *C, size_t M, size_t K, size_t N)
+{
+    for (size_t i = 0; i < M; ++i)
+    {
+        for (size_t j = 0; j < N; j += 8)
+        {
+            __m256 acc = _mm256_setzero_ps();
+
+            for (size_t k = 0; k < K; ++k)
+            {
+                __m256 a = _mm256_set1_ps(A[i * K + k]);
+                __m256 b = _mm256_loadu_ps(B + k * N + j);
+                acc = _mm256_fmadd_ps(a, b, acc);
+            }
+
+            _mm256_storeu_ps(C + i * N + j, acc);
+        }
+    }
+}

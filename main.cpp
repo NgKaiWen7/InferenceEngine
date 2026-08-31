@@ -5,6 +5,8 @@
 #include "pooler/pooler.hpp"
 #include <stdfloat>
 #include <chrono>
+#include <cstdlib>
+#include <cblas.h>
 
 int main()
 {
@@ -35,6 +37,7 @@ int main()
         "while remaining representative of typical semantic embedding workloads.");
 
     TransformerWorkspace workspace = TransformerWorkspace(token_ids.size());
+    std::cout << "Token size: " << token_ids.size() << std::endl;
     Tensor *input = &workspace.buffer_a;
     Tensor *output = &workspace.buffer_b;
 

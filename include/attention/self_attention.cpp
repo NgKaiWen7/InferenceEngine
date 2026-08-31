@@ -37,17 +37,63 @@ void TransformerLayer::load(const std::string &file_path, int layer)
     output_layernorm_weight = tensor_loader.get_tensor(prefix + "output.LayerNorm.weight");
     output_layernorm_bias = tensor_loader.get_tensor(prefix + "output.LayerNorm.bias");
 }
-
-void TransformerLayer::linear(const Tensor &input, const Tensor &weight, const Tensor &bias, Tensor &output)
+void TransformerLayer::linear(
+    const Tensor &input,
+    const Tensor &weight,
+    const Tensor &bias,
+    Tensor &output)
 {
     size_t M = input.shape[0];
     size_t K = input.shape[1];
     size_t N = weight.shape[0];
-    cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, M, N, K, 1.0f, input.data, K, weight.data, K, 0.0f, output.data, N);
+
+    std::cout
+        << "Linear: "
+        << "input=[" << M << ", " << K << "] "
+        << "weight=[" << weight.shape[0] << ", " << weight.shape[1] << "] "
+        << "bias=[" << bias.shape[0] << "] "
+        << "output=[" << output.shape[0] << ", " << output.shape[1] << "] "
+        << "GEMM=(" << M << "x" << K << ") * ("
+        << K << "x" << N << ")"
+        << std::endl;
+
+    auto gemm_start = std::chrono::high_resolution_clock::now();
+
+    gemm_avx2(input.data, weight.data, output.data, M, K, N);
+    // cblas_sgemm(
+    //     CblasRowMajor,
+    //     CblasNoTrans,
+    //     CblasTrans,
+    //     M, N, K,
+    //     1.0f,
+    //     input.data, K,
+    //     weight.data, K,
+    //     0.0f,
+    //     output.data, N
+    // );
+
+    auto gemm_end = std::chrono::high_resolution_clock::now();
+
+    double gemm_ms =
+        std::chrono::duration<double, std::milli>(
+            gemm_end - gemm_start).count();
+
+    auto bias_start = std::chrono::high_resolution_clock::now();
 
     for (size_t i = 0; i < M; ++i)
         for (size_t j = 0; j < N; ++j)
             output.data[i * N + j] += bias.data[j];
+
+    auto bias_end = std::chrono::high_resolution_clock::now();
+
+    double bias_ms =
+        std::chrono::duration<double, std::milli>(
+            bias_end - bias_start).count();
+
+    std::cout
+        << "  GEMM: " << gemm_ms << " ms"
+        << " | Bias: " << bias_ms << " ms"
+        << std::endl;
 }
 
 void TransformerLayer::attention(const Tensor &input, Tensor &output, TransformerWorkspace &workspace)
