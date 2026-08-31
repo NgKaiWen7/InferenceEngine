@@ -10,6 +10,7 @@ struct TransformerWorkspace
     Tensor query;
     Tensor key;
     Tensor value;
+    Tensor value_T;
     Tensor scores;
     Tensor context;
     Tensor attention_dense;
@@ -23,6 +24,7 @@ struct TransformerWorkspace
         query.allocate({static_cast<int64_t>(sequence_length), 1024});
         key.allocate({static_cast<int64_t>(sequence_length), 1024});
         value.allocate({static_cast<int64_t>(sequence_length), 1024});
+        value_T.allocate({1024, static_cast<int64_t>(sequence_length)});
         context.allocate({static_cast<int64_t>(sequence_length), 1024});
 
         scores.allocate({16, static_cast<int64_t>(sequence_length), static_cast<int64_t>(sequence_length)});
@@ -48,6 +50,7 @@ private:
     const int hidden_size = 1024;
     const int num_heads = 16;
     const int head_dim = 64;
+    const float scaling = 1 / std::sqrt(static_cast<float>(head_dim));
 
     Tensor attention_query_weight;
     Tensor attention_query_bias;

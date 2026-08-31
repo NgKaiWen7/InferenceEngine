@@ -2,7 +2,7 @@
 #include "tokenizer/BGEtokenizer.hpp"
 #include "embedding/embedding.hpp"
 #include "attention/self_attention.hpp"
-#include "pooler/pooler.hpp"
+#include "utils/immitrin.hpp"
 #include <stdfloat>
 #include <chrono>
 #include <cstdlib>
@@ -26,15 +26,9 @@ int main()
         layers[i].load("bge-m3-safetensors/model.safetensors", i);
 
     auto start = std::chrono::high_resolution_clock::now();
+
     auto token_ids = tokenizer.encode(
-        "This is a longer sample sentence for benchmarking the BGE-M3 inference engine. "
-        "The purpose is to evaluate the performance of tokenisation, embedding generation, "
-        "transformer computation, attention, feed forward layers, layer normalisation, "
-        "and memory access patterns under a more realistic input sequence. "
-        "We want to compare the performance of the baseline C++ implementation against "
-        "an implementation optimised with OpenBLAS and CPU SIMD instructions. "
-        "The input should contain enough tokens to make computational differences measurable "
-        "while remaining representative of typical semantic embedding workloads.");
+        "This benchmark evaluates the performance of a BGE-M3 text embedding model using a moderately long natural-language input. The text is intentionally designed to contain a mixture of technical terminology, descriptive statements, and ordinary sentences so that the resulting token sequence provides a realistic workload for CPU inference. The objective is to measure the computational cost of tokenisation, transformer execution, attention mechanisms, feed-forward networks, layer normalisation, matrix multiplication, memory movement, pooling, and embedding normalisation. This benchmark can be used to compare different implementations of the same model, including SentenceTransformers with PyTorch, a native C++ implementation using standard matrix operations, an implementation accelerated with OpenBLAS, and a version using CPU SIMD instructions such as AVX2. Consistent input data, sequence length, model weights, numerical precision, and execution environment are important when comparing performance. Repeated measurements should be performed after several warm-up iterations to reduce the influence of model loading, memory allocation, CPU frequency changes, and framework initialisation. The benchmark should also record the number of generated tokens because transformer computation depends strongly on sequence length. Longer sequences increase the amount of work required by the linear projections and feed-forward layers, while self-attention introduces additional computational and memory requirements as the sequence grows. By keeping the input fixed, performance improvements can be attributed more reliably to changes in the implementation rather than differences in the workload.");
 
     TransformerWorkspace workspace = TransformerWorkspace(token_ids.size());
     std::cout << "Token size: " << token_ids.size() << std::endl;
@@ -42,27 +36,23 @@ int main()
     Tensor *output = &workspace.buffer_b;
 
     embedding.encode(token_ids, *input);
-    for (int layer = 0; layer < 1; ++layer)
+    for (int layer = 0; layer < 24; ++layer)
     {
         Tensor next_output;
         layers[layer].attention(*input, *output, workspace);
+
         std::swap(input, output);
     }
-    float *embedding_output = (*output).data;
-
-    float norm = 0.0f;
-
-    for (size_t j = 0; j < 1024; ++j)
-    {
-        norm += embedding_output[j] * embedding_output[j];
-    }
-
-    norm = std::sqrt(norm);
-
-    for (size_t j = 0; j < 1024; ++j)
-        embedding_output[j] /= norm;
+    float *embedding_output = (*input).data;
+    normalize(embedding_output, 1024);
 
     auto end = std::chrono::high_resolution_clock::now();
     double total = std::chrono::duration<double, std::milli>(end - start).count();
     std::cout << "Average: " << total << " ms\n";
+    std::cout << "Embeddings: ";
+    for (size_t i = 0; i < 10; i++)
+    {
+        std::cout << embedding_output[i] << ", ";
+    }
+    std::cout << std::endl;
 }

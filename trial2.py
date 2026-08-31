@@ -4,14 +4,9 @@ import time
 TEXT_ENCODER = SentenceTransformer("BAAI/bge-m3", local_files_only=True)
 
 texts = [
-    "This is a longer sample sentence for benchmarking the BGE-M3 inference engine. "
-    "The purpose is to evaluate the performance of tokenisation, embedding generation, "
-    "transformer computation, attention, feed forward layers, layer normalisation, "
-    "and memory access patterns under a more realistic input sequence. "
-    "We want to compare the performance of the baseline C++ implementation against "
-    "an implementation optimised with OpenBLAS and CPU SIMD instructions. "
-    "The input should contain enough tokens to make computational differences measurable "
-    "while remaining representative of typical semantic embedding workloads."
+"""
+This benchmark evaluates the performance of a BGE-M3 text embedding model using a moderately long natural-language input. The text is intentionally designed to contain a mixture of technical terminology, descriptive statements, and ordinary sentences so that the resulting token sequence provides a realistic workload for CPU inference. The objective is to measure the computational cost of tokenisation, transformer execution, attention mechanisms, feed-forward networks, layer normalisation, matrix multiplication, memory movement, pooling, and embedding normalisation. This benchmark can be used to compare different implementations of the same model, including SentenceTransformers with PyTorch, a native C++ implementation using standard matrix operations, an implementation accelerated with OpenBLAS, and a version using CPU SIMD instructions such as AVX2. Consistent input data, sequence length, model weights, numerical precision, and execution environment are important when comparing performance. Repeated measurements should be performed after several warm-up iterations to reduce the influence of model loading, memory allocation, CPU frequency changes, and framework initialisation. The benchmark should also record the number of generated tokens because transformer computation depends strongly on sequence length. Longer sequences increase the amount of work required by the linear projections and feed-forward layers, while self-attention introduces additional computational and memory requirements as the sequence grows. By keeping the input fixed, performance improvements can be attributed more reliably to changes in the implementation rather than differences in the workload.
+"""
 ]
 
 start = time.perf_counter()
@@ -33,3 +28,4 @@ encode_time = time.perf_counter() - start
 print(f"Tokenization: {tokenize_time * 1000:.3f} ms")
 print(f"Embedding:    {encode_time * 1000:.3f} ms")
 print(f"Total:        {(tokenize_time + encode_time) * 1000:.3f} ms")
+print(embeddings)

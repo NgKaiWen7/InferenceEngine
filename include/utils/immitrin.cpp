@@ -8,33 +8,56 @@ inline __m256 gelu_avx2(__m256 x)
     const __m256 c1 = _mm256_set1_ps(0.7978845608f);
     const __m256 half = _mm256_set1_ps(0.5f);
     const __m256 one = _mm256_set1_ps(1.0f);
+    const __m256 c27 = _mm256_set1_ps(27.0f);
+    const __m256 c9 = _mm256_set1_ps(9.0f);
 
     __m256 x2 = _mm256_mul_ps(x, x);
     __m256 x3 = _mm256_mul_ps(x2, x);
 
-    __m256 inner = _mm256_add_ps(x, _mm256_mul_ps(c0, x3));
+    __m256 inner = _mm256_add_ps(
+        x,
+        _mm256_mul_ps(c0, x3)
+    );
 
     inner = _mm256_mul_ps(c1, inner);
 
     __m256 inner2 = _mm256_mul_ps(inner, inner);
 
-    __m256 numerator = _mm256_mul_ps(inner, _mm256_add_ps(_mm256_set1_ps(27.0f), inner2));
-    __m256 denominator = _mm256_add_ps(_mm256_set1_ps(27.0f), _mm256_mul_ps(_mm256_set1_ps(9.0f), inner2));
+    __m256 numerator = _mm256_mul_ps(
+        inner,
+        _mm256_add_ps(c27, inner2)
+    );
+
+    __m256 denominator = _mm256_add_ps(
+        c27,
+        _mm256_mul_ps(c9, inner2)
+    );
+
     __m256 tanh_value = _mm256_div_ps(numerator, denominator);
 
     return _mm256_mul_ps(
         _mm256_mul_ps(half, x),
-        _mm256_add_ps(one, tanh_value));
+        _mm256_add_ps(one, tanh_value)
+    );
 }
-
+float gelu_scalar(float x)
+{
+    return 0.5f * x * (1.0f + std::tanh(
+        0.7978845608f * (x + 0.044715f * x * x * x)
+    ));
+}
 void gelu(Tensor &values)
 {
-    for (size_t i = 0; i < values.size; i += 8)
+    size_t i = 0;
+
+    for (; i + 8 <= values.size; i += 8)
     {
         __m256 x = _mm256_loadu_ps(values.data + i);
         __m256 y = gelu_avx2(x);
         _mm256_storeu_ps(values.data + i, y);
     }
+    for (; i < values.size; ++i)
+        values.data[i] = gelu_scalar(values.data[i]);
 }
 
 inline float sum_avx2(const float *x, size_t n)
@@ -103,17 +126,38 @@ inline void sub_const(float *x, const float c, size_t n)
 inline void division(float *x, const float c, size_t n)
 {
     size_t i = 0;
-    const __m256 c_256 = _mm256_set1_ps(c);
+    const __m256 inv_c = _mm256_set1_ps(1.0f / c);
 
     for (; i + 8 <= n; i += 8)
     {
-        __m256 x_256 = _mm256_loadu_ps(x + i);
-        __m256 output = _mm256_div_ps(x_256, c_256);
-        _mm256_storeu_ps(x + i, output);
+        __m256 v = _mm256_loadu_ps(x + i);
+        _mm256_storeu_ps(x + i, _mm256_mul_ps(v, inv_c));
     }
 
     for (; i < n; ++i)
-        x[i] = x[i] / c;
+        x[i] *= inv_c[0];
+}
+
+inline float dot_product_avx2(const float *a, const float *b, size_t n)
+{
+    __m256 sum = _mm256_setzero_ps();
+
+    size_t i = 0;
+
+    for (; i + 8 <= n; i += 8)
+    {
+        __m256 va = _mm256_loadu_ps(a + i);
+        __m256 vb = _mm256_loadu_ps(b + i);
+
+        sum = _mm256_fmadd_ps(va, vb, sum);
+    }
+    float total = sum[0] + sum[1] + sum[2] + sum[3] +
+                  sum[4] + sum[5] + sum[6] + sum[7];
+
+    for (; i < n; i++)
+        total += a[i] * b[i];
+
+    return total;
 }
 
 void residual(Tensor &current_layers, const Tensor &previous_layers)
@@ -136,7 +180,7 @@ void residual(Tensor &current_layers, const Tensor &previous_layers)
 
 void layer_norm(Tensor &input, const Tensor &weight, const Tensor &bias)
 {
-    constexpr float eps = 1e-5f;
+    constexpr float eps = 1e-16f;
 
     size_t rows = input.shape[0];
     size_t cols = input.shape[1];
@@ -151,22 +195,22 @@ void layer_norm(Tensor &input, const Tensor &weight, const Tensor &bias)
 
         float variance = sum_square_avx2(row, cols);
         variance /= cols;
-        float inv_std = 1.0f / std::sqrt(variance + eps);
+        float inv_std = std::sqrt(variance + eps);
 
         division(row, inv_std, cols);
         size_t j = 0;
         for (; j + 8 <= cols; j += 8)
         {
-            __m256 w = _mm256_loadu_ps(weight.data + i);
-            __m256 b = _mm256_loadu_ps(bias.data + i);
-            __m256 x = _mm256_loadu_ps(row + i);
+            __m256 w = _mm256_loadu_ps(weight.data + j);
+            __m256 b = _mm256_loadu_ps(bias.data + j);
+            __m256 x = _mm256_loadu_ps(row + j);
             __m256 mul = _mm256_mul_ps(w, x);
             __m256 y = _mm256_add_ps(mul, b);
-            _mm256_storeu_ps(row + i, y);
+            _mm256_storeu_ps(row + j, y);
         }
         // Remaining elements
-        for (; i < cols; ++i)
-            row[i] = weight.data[i] * row[i] + bias.data[i];
+        for (; j < cols; ++j)
+            row[j] = weight.data[j] * row[j] + bias.data[j];
     }
 }
 
@@ -186,6 +230,35 @@ void gemm_avx2(const float *A, const float *B, float *C, size_t M, size_t K, siz
             }
 
             _mm256_storeu_ps(C + i * N + j, acc);
+        }
+    }
+}
+
+void normalize(float *x, size_t size)
+{
+    float norm = dot_product_avx2(x, x, size);
+    norm = std::sqrt(norm);
+    division(x, norm, size);
+}
+
+void QKV(const Tensor &query, const Tensor &value, const Tensor &key,
+         const int num_heads, const int head_dim, const int sequence_length, const int hidden_size, const float scaling,
+         Tensor &scores, Tensor &context)
+{
+
+#pragma omp parallel for
+    for (int h = 0; h < num_heads; h++)
+    {
+        int offset = h * head_dim;
+        int score_offset = h * sequence_length * sequence_length;
+
+        for (size_t i = 0; i < sequence_length; i++)
+        {
+            for (size_t j = 0; j < sequence_length; j++)
+            {
+                float sum = dot_product_avx2(query.data + offset + i * hidden_size, key.data + offset + j * hidden_size, head_dim);
+                scores.data[score_offset + i * sequence_length + j] = sum * scaling;
+            }
         }
     }
 }
