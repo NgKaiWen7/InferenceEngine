@@ -1,6 +1,7 @@
 #include <immintrin.h>
 #include "utils/immitrin.hpp"
 #include "attention/self_attention.hpp"
+#include <cblas.h>
 
 inline __m256 gelu_avx2(__m256 x)
 {
@@ -16,8 +17,7 @@ inline __m256 gelu_avx2(__m256 x)
 
     __m256 inner = _mm256_add_ps(
         x,
-        _mm256_mul_ps(c0, x3)
-    );
+        _mm256_mul_ps(c0, x3));
 
     inner = _mm256_mul_ps(c1, inner);
 
@@ -25,26 +25,48 @@ inline __m256 gelu_avx2(__m256 x)
 
     __m256 numerator = _mm256_mul_ps(
         inner,
-        _mm256_add_ps(c27, inner2)
-    );
+        _mm256_add_ps(c27, inner2));
 
     __m256 denominator = _mm256_add_ps(
         c27,
-        _mm256_mul_ps(c9, inner2)
-    );
+        _mm256_mul_ps(c9, inner2));
 
     __m256 tanh_value = _mm256_div_ps(numerator, denominator);
 
     return _mm256_mul_ps(
         _mm256_mul_ps(half, x),
-        _mm256_add_ps(one, tanh_value)
-    );
+        _mm256_add_ps(one, tanh_value));
 }
+
+inline float max_avx2(const float *x, size_t n)
+{
+    __m256 max_value = _mm256_set1_ps(-INFINITY);
+
+    size_t i = 0;
+
+    for (; i + 8 <= n; i += 8)
+    {
+        __m256 v = _mm256_loadu_ps(x + i);
+        max_value = _mm256_max_ps(max_value, v);
+    }
+
+    alignas(32) float result[8];
+    _mm256_store_ps(result, max_value);
+
+    float max_result = result[0];
+
+    for (int j = 1; j < 8; j++)
+        max_result = std::max(max_result, result[j]);
+
+    for (; i < n; i++)
+        max_result = std::max(max_result, x[i]);
+
+    return max_result;
+}
+
 float gelu_scalar(float x)
 {
-    return 0.5f * x * (1.0f + std::tanh(
-        0.7978845608f * (x + 0.044715f * x * x * x)
-    ));
+    return 0.5f * x * (1.0f + std::tanh(0.7978845608f * (x + 0.044715f * x * x * x)));
 }
 void gelu(Tensor &values)
 {
@@ -138,28 +160,6 @@ inline void division(float *x, const float c, size_t n)
         x[i] *= inv_c[0];
 }
 
-inline float dot_product_avx2(const float *a, const float *b, size_t n)
-{
-    __m256 sum = _mm256_setzero_ps();
-
-    size_t i = 0;
-
-    for (; i + 8 <= n; i += 8)
-    {
-        __m256 va = _mm256_loadu_ps(a + i);
-        __m256 vb = _mm256_loadu_ps(b + i);
-
-        sum = _mm256_fmadd_ps(va, vb, sum);
-    }
-    float total = sum[0] + sum[1] + sum[2] + sum[3] +
-                  sum[4] + sum[5] + sum[6] + sum[7];
-
-    for (; i < n; i++)
-        total += a[i] * b[i];
-
-    return total;
-}
-
 void residual(Tensor &current_layers, const Tensor &previous_layers)
 {
     if (current_layers.size != previous_layers.size)
@@ -214,29 +214,9 @@ void layer_norm(Tensor &input, const Tensor &weight, const Tensor &bias)
     }
 }
 
-void gemm_avx2(const float *A, const float *B, float *C, size_t M, size_t K, size_t N)
-{
-    for (size_t i = 0; i < M; ++i)
-    {
-        for (size_t j = 0; j < N; j += 8)
-        {
-            __m256 acc = _mm256_setzero_ps();
-
-            for (size_t k = 0; k < K; ++k)
-            {
-                __m256 a = _mm256_set1_ps(A[i * K + k]);
-                __m256 b = _mm256_loadu_ps(B + k * N + j);
-                acc = _mm256_fmadd_ps(a, b, acc);
-            }
-
-            _mm256_storeu_ps(C + i * N + j, acc);
-        }
-    }
-}
-
 void normalize(float *x, size_t size)
 {
-    float norm = dot_product_avx2(x, x, size);
+    float norm = cblas_sdot(size, x, 1, x, 1);
     norm = std::sqrt(norm);
     division(x, norm, size);
 }
@@ -245,20 +225,49 @@ void QKV(const Tensor &query, const Tensor &value, const Tensor &key,
          const int num_heads, const int head_dim, const int sequence_length, const int hidden_size, const float scaling,
          Tensor &scores, Tensor &context)
 {
-
 #pragma omp parallel for
     for (int h = 0; h < num_heads; h++)
     {
         int offset = h * head_dim;
         int score_offset = h * sequence_length * sequence_length;
 
+        cblas_sgemm(
+            CblasRowMajor,
+            CblasNoTrans,
+            CblasTrans,
+            sequence_length,
+            sequence_length,
+            head_dim,
+            scaling,
+            query.data + offset, hidden_size,
+            key.data + offset, hidden_size,
+            0.0f,
+            scores.data + score_offset, sequence_length);
+
         for (size_t i = 0; i < sequence_length; i++)
         {
-            for (size_t j = 0; j < sequence_length; j++)
+            float *row = scores.data + score_offset + i * sequence_length;
+            float max_value = max_avx2(row, sequence_length);
+            sub_const(row, max_value, sequence_length);
+            for (size_t j = 0; j < sequence_length; ++j)
             {
-                float sum = dot_product_avx2(query.data + offset + i * hidden_size, key.data + offset + j * hidden_size, head_dim);
-                scores.data[score_offset + i * sequence_length + j] = sum * scaling;
+                row[j] = std::exp(row[j]);
             }
+            float sum = sum_avx2(row, sequence_length);
+            division(row, sum, sequence_length);
         }
+
+        cblas_sgemm(
+            CblasRowMajor,
+            CblasNoTrans,
+            CblasNoTrans,
+            sequence_length,
+            head_dim,
+            sequence_length,
+            1.0f,
+            scores.data + score_offset, sequence_length,
+            value.data + offset, hidden_size,
+            0.0f,
+            context.data + offset, hidden_size);
     }
 }

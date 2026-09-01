@@ -10,7 +10,6 @@ struct TransformerWorkspace
     Tensor query;
     Tensor key;
     Tensor value;
-    Tensor value_T;
     Tensor scores;
     Tensor context;
     Tensor attention_dense;
@@ -24,7 +23,6 @@ struct TransformerWorkspace
         query.allocate({static_cast<int64_t>(sequence_length), 1024});
         key.allocate({static_cast<int64_t>(sequence_length), 1024});
         value.allocate({static_cast<int64_t>(sequence_length), 1024});
-        value_T.allocate({1024, static_cast<int64_t>(sequence_length)});
         context.allocate({static_cast<int64_t>(sequence_length), 1024});
 
         scores.allocate({16, static_cast<int64_t>(sequence_length), static_cast<int64_t>(sequence_length)});
