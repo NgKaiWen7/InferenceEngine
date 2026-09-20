@@ -1,0 +1,21 @@
+[project]
+name = "inferenceengine"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { email = "ngkaiwen7@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "huggingface>=0.0.1",
+    "torch>=2.14.0",
+    "transformers>=5.17.0",
+]
+
+[project.scripts]
+inferenceengine = "inferenceengine:main"
+
+[build-system]
+requires = ["uv_build>=0.12.13,<0.13.0"]
+build-backend = "uv_build"

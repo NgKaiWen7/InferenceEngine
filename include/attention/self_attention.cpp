@@ -69,21 +69,27 @@ void TransformerLayer::attention(const Tensor &input, Tensor &output, Transforme
     Tensor &query = workspace.query;
     Tensor &value = workspace.value;
     Tensor &key = workspace.key;
+    auto t0 = std::chrono::high_resolution_clock::now();
     linear(input, attention_value_weight, attention_value_bias, value);
+    auto t1 = std::chrono::high_resolution_clock::now();
+
+    double elapsed_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    std::printf("attention value projection: %.4f ms\n", elapsed_ms);
+
     linear(input, attention_query_weight, attention_query_bias, query);
     linear(input, attention_key_weight, attention_key_bias, key);
-    
+
     Tensor &scores = workspace.scores;
     Tensor &context = workspace.context;
     QKV(query, value, key, num_heads, head_dim, sequence_length, hidden_size,scaling, scores, context);
 
     Tensor &attention_dense = workspace.attention_dense;
     linear(context, attention_output_weight, attention_output_bias, attention_dense);
-    
+
     residual(attention_dense, input);
-    
+
     layer_norm(attention_dense, attention_layernorm_weight, attention_layernorm_bias);
-    
+
     Tensor &intermediate = workspace.intermediate;
     linear(attention_dense, intermediate_weight, intermediate_bias, intermediate);
 
@@ -92,10 +98,10 @@ void TransformerLayer::attention(const Tensor &input, Tensor &output, Transforme
         intermediate.data[i] = 0.5f * intermediate.data[i] * (1.0f + std::erf(intermediate.data[i] * 0.7071067811865475f));
     }
     // gelu(intermediate);
-    
+
     linear(intermediate, output_weight, output_bias, output);
-    
+
     residual(output, attention_dense);
-    
+
     layer_norm(output, output_layernorm_weight, output_layernorm_bias);
 }

@@ -5,3 +5,5 @@ xlm-roberta-base/*
 onnxruntime-gpu/**
 onnxruntime-linux-x64-gpu_cuda13-1.28.0.tgz
 *.o
+Qwen3-1.7B/*
+Qwen3-1.7B-tokenizer/*

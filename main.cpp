@@ -50,7 +50,6 @@ int main()
     embedding.encode(token_ids, *input);
     for (int layer = 0; layer < 24; ++layer)
     {
-        Tensor next_output;
         layers[layer].attention(*input, *output, workspace);
 
         std::swap(input, output);
