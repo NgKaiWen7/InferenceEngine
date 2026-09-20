@@ -1,43 +1,36 @@
+from pathlib import Path
+
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-model_name = "Qwen/Qwen3-1.7B"
+import torch
+MODEL_NAME = "Qwen/Qwen3-1.7B"
 
-# load the tokenizer and the model
-tokenizer = AutoTokenizer.from_pretrained("./Qwen3-1.7B-tokenizer")
-# tokenizer.save_pretrained("./Qwen3-1.7B-tokenizer")
+MODEL_DIR = Path("./Qwen3-1.7B")
+TOKENIZER_DIR = Path("./Qwen3-1.7B-tokenizer")
 
-model = AutoModelForCausalLM.from_pretrained("./Qwen3-1.7B")
-# model.save_pretrained("./Qwen3-1.7B")
+
+def load_model():
+    if TOKENIZER_DIR.exists():
+        print(f"Loading tokenizer from {TOKENIZER_DIR}")
+        tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_DIR)
+    else:
+        print(f"Downloading tokenizer from {MODEL_NAME}")
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+        tokenizer.save_pretrained(TOKENIZER_DIR)
+
+    if MODEL_DIR.exists():
+        print(f"Loading model from {MODEL_DIR}")
+        model = AutoModelForCausalLM.from_pretrained(MODEL_DIR)
+    else:
+        print(f"Downloading model from {MODEL_NAME}")
+        model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
+        model.save_pretrained(MODEL_DIR)
+
+    return tokenizer, model
+
+tokenizer, model = load_model()
+
 print(type(model))
-# prepare the model input
-prompt = "Give me a short introduction to large language model."
-messages = [
-    {"role": "user", "content": prompt}
-]
-text = tokenizer.apply_chat_template(
-    messages,
-    tokenize=False,
-    add_generation_prompt=True,
-    enable_thinking=True # Switches between thinking and non-thinking modes. Default is True.
-)
-model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
-
-# conduct text completion
-generated_ids = model.generate(
-    **model_inputs,
-    max_new_tokens=32768
-)
-output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
-
-# parsing thinking content
-try:
-    # rindex finding 151668 (</think>)
-    index = len(output_ids) - output_ids[::-1].index(151668)
-except ValueError:
-    index = 0
-
-thinking_content = tokenizer.decode(output_ids[:index], skip_special_tokens=True).strip("\n")
-content = tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip("\n")
-
-print("thinking content:", thinking_content)
-print("content:", content)
+input_ids = torch.tensor([0])
+token_embeddings = model.model.embed_tokens(input_ids)
+print(token_embeddings)
