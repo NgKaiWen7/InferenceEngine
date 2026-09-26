@@ -1,7 +1,5 @@
 #include "BPE.hpp"
 
-#include <algorithm>
-#include <sstream>
 #include <climits>
 #include <iostream>
 #include <fstream>
@@ -148,7 +146,7 @@ std::vector<std::string> split_utf8(const std::string &input)
 
 std::vector<std::string> BPETokenizer::bpe(const std::string &word)
 {
-    auto pieces = split_utf8(word);
+    std::vector<std::string> pieces = split_utf8(word);
     int best_rank = INT_MAX;
     while (pieces.size() > 1)
     {
