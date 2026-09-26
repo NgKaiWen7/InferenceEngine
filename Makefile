@@ -1,55 +1,23 @@
-CXX = g++
-CXXFLAGS = -std=c++23 -Iinclude
+MKLROOT ?= /opt/intel/oneapi/mkl/2026.1
+ICOMPROOT ?= /opt/intel/oneapi/compiler/2026.1
 
-tokenizer: clean tokenizer.cpp include/tokenizer/UnicodeEncoder.cpp include/tokenizer/BPE.cpp
-	$(CXX) $(CXXFLAGS) tokenizer.cpp include/tokenizer/UnicodeEncoder.cpp include/tokenizer/BPE.cpp -licuuc -licui18n -o tokenizer
+CXXFLAGS += -std=c++23 -O3 -march=native -fopenmp -DNDEBUG
 
-main: main.cpp \
-include/utils/conversion.cpp \
-include/embedding/embedding.cpp \
-include/tokenizer/BPE.cpp \
-include/tokenizer/UnicodeEncoder.cpp \
-include/attention/casual_attention.cpp
-	$(CXX) $(CXXFLAGS) \
-	    main.cpp \
-	    include/utils/conversion.cpp \
-	    include/embedding/embedding.cpp \
-		include/tokenizer/BPE.cpp \
-		include/tokenizer/UnicodeEncoder.cpp \
-		include/attention/casual_attention.cpp \
-	    -licuuc -licui18n \
-	    -o main
-		
-xlmr: main.cpp \
-	include-old/tokenizer/BGEtokenizer.cpp \
-	include-old/utils/conversion.cpp \
-	include-old/embedding/embedding.cpp \
-	include-old/attention/self_attention.cpp \
-	include-old/pooler/pooler.cpp
-	$(CXX) $(CXXFLAGS) \
-	    main.cpp \
-		include-old/tokenizer/BGEtokenizer.cpp \
-		include-old/embedding/embedding.cpp \
-	    include-old/utils/conversion.cpp \
-		include-old/attention/self_attention.cpp \
-		include-old/pooler/pooler.cpp \
-	    -licuuc -licui18n -lsentencepiece \
-	    -o main
+INCLUDES := -Iinclude -I"$(MKLROOT)/include"
+LIBDIRS  := -L"$(MKLROOT)/lib/intel64" -Wl,-rpath,"$(MKLROOT)/lib/intel64" \
+            -L"$(ICOMPROOT)/lib" -Wl,-rpath,"$(ICOMPROOT)/lib"
 
-xlmr-blas: main.cpp
-	$(CXX) $(CXXFLAGS) -O3 -march=native -fopenmp \
-		main.cpp \
-		include/tokenizer/BGEtokenizer.cpp \
-		include/embedding/embedding.cpp \
-		include/utils/conversion.cpp \
-		include/utils/immitrin.cpp \
-		include/attention/self_attention.cpp \
-		-licuuc -licui18n -lsentencepiece -lopenblas -lpthread \
+# Threaded MKL (NOT mkl_sequential — see prior gotcha)
+MKL_LIBS := -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -liomp5
+
+SRCS := main.cpp \
+        include/tokenizer/BGEtokenizer.cpp \
+        include/embedding/embedding.cpp \
+        include/utils/conversion.cpp \
+        include/utils/immitrin.cpp \
+        include/attention/self_attention.cpp
+
+xlmr-blas: $(SRCS)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(SRCS) $(LIBDIRS) \
+		-licuuc -licui18n -lsentencepiece $(MKL_LIBS) -lpthread -lm -ldl \
 		-o main
-
-safetensor_loader:
-	$(CXX) $(CXXFLAGS) safe_tensor.cpp -o safe_tensor
-
-clean:
-	rm -f tokenizer
-	rm -f safe_tensor

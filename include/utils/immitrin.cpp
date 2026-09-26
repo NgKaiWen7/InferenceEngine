@@ -1,7 +1,7 @@
 #include <immintrin.h>
 #include "utils/immitrin.hpp"
 #include "attention/self_attention.hpp"
-#include <cblas.h>
+#include <mkl.h>
 
 inline __m256 gelu_avx2(__m256 x)
 {
