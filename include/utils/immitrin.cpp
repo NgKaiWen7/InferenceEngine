@@ -84,63 +84,47 @@ void gelu(Tensor &values)
 
 inline float sum_avx2(const float *x, size_t n)
 {
-    __m256 acc = _mm256_setzero_ps();
-
+    __m512 acc = _mm512_setzero_ps();
     size_t i = 0;
-
-    for (; i + 8 <= n; i += 8)
+    for (; i + 16 <= n; i += 16)
     {
-        acc = _mm256_add_ps(acc, _mm256_loadu_ps(x + i));
+        acc = _mm512_add_ps(acc, _mm512_loadu_ps(x + i));
     }
-
-    float tmp[8];
-    _mm256_storeu_ps(tmp, acc);
-
-    float sum = tmp[0] + tmp[1] + tmp[2] + tmp[3] +
-                tmp[4] + tmp[5] + tmp[6] + tmp[7];
-
+    float tmp[16];
+    _mm512_storeu_ps(tmp, acc);
+    float sum = 0.0f;
+    for (int j = 0; j < 16; ++j)
+        sum += tmp[j];
     for (; i < n; ++i)
-    {
         sum += x[i];
-    }
     return sum;
 }
 
 inline float sum_square_avx2(const float *x, size_t n)
 {
     size_t i = 0;
-    __m256 acc = _mm256_setzero_ps();
-
-    for (; i + 8 <= n; i += 8)
+    __m512 acc = _mm512_setzero_ps();
+    for (; i + 16 <= n; i += 16)
     {
-        __m256 v = _mm256_loadu_ps(x + i);
-        acc = _mm256_fmadd_ps(v, v, acc);
+        __m512 v = _mm512_loadu_ps(x + i);
+        acc = _mm512_fmadd_ps(v, v, acc);
     }
-
-    float result[8];
-    _mm256_storeu_ps(result, acc);
-
-    float sum = result[0] + result[1] + result[2] + result[3] +
-                result[4] + result[5] + result[6] + result[7];
-
+    float sum = _mm512_reduce_add_ps(acc);
     for (; i < n; ++i)
         sum += x[i] * x[i];
-
     return sum;
 }
 
 inline void sub_const(float *x, const float c, size_t n)
 {
     size_t i = 0;
-    const __m256 c_256 = _mm256_set1_ps(c);
-
-    for (; i + 8 <= n; i += 8)
+    const __m512 c_512 = _mm512_set1_ps(c);
+    for (; i + 16 <= n; i += 16)
     {
-        __m256 x_256 = _mm256_loadu_ps(x + i);
-        __m256 output = _mm256_sub_ps(x_256, c_256);
-        _mm256_storeu_ps(x + i, output);
+        __m512 x_512 = _mm512_loadu_ps(x + i);
+        __m512 output = _mm512_sub_ps(x_512, c_512);
+        _mm512_storeu_ps(x + i, output);
     }
-
     for (; i < n; ++i)
         x[i] -= c;
 }
@@ -148,32 +132,29 @@ inline void sub_const(float *x, const float c, size_t n)
 inline void division(float *x, const float c, size_t n)
 {
     size_t i = 0;
-    const __m256 inv_c = _mm256_set1_ps(1.0f / c);
-
-    for (; i + 8 <= n; i += 8)
+    const float inv_c = 1.0f / c;
+    const __m512 inv_c_512 = _mm512_set1_ps(inv_c);
+    for (; i + 16 <= n; i += 16)
     {
-        __m256 v = _mm256_loadu_ps(x + i);
-        _mm256_storeu_ps(x + i, _mm256_mul_ps(v, inv_c));
+        __m512 v = _mm512_loadu_ps(x + i);
+        _mm512_storeu_ps(x + i, _mm512_mul_ps(v, inv_c_512));
     }
-
     for (; i < n; ++i)
-        x[i] *= inv_c[0];
+        x[i] *= inv_c;
 }
 
 void residual(Tensor &current_layers, const Tensor &previous_layers)
 {
     if (current_layers.size != previous_layers.size)
         throw std::invalid_argument("Residual tensors must have the same size");
-
     size_t i = 0;
-    for (; i + 8 <= current_layers.size; i += 8)
+    for (; i + 16 <= current_layers.size; i += 16)
     {
-        __m256 current = _mm256_loadu_ps(current_layers.data + i);
-        __m256 previous = _mm256_loadu_ps(previous_layers.data + i);
-        __m256 new_data = _mm256_add_ps(current, previous);
-        _mm256_storeu_ps(current_layers.data + i, new_data);
+        __m512 current = _mm512_loadu_ps(current_layers.data + i);
+        __m512 previous = _mm512_loadu_ps(previous_layers.data + i);
+        __m512 new_data = _mm512_add_ps(current, previous);
+        _mm512_storeu_ps(current_layers.data + i, new_data);
     }
-    // Remaining elements
     for (; i < current_layers.size; ++i)
         current_layers.data[i] += previous_layers.data[i];
 }
@@ -214,13 +195,6 @@ void layer_norm(Tensor &input, const Tensor &weight, const Tensor &bias)
     }
 }
 
-void normalize(float *x, size_t size)
-{
-    float norm = cblas_sdot(size, x, 1, x, 1);
-    norm = std::sqrt(norm);
-    division(x, norm, size);
-}
-
 void QKV(const Tensor &query, const Tensor &value, const Tensor &key,
          const int num_heads, const int head_dim, const int sequence_length, const int hidden_size, const float scaling,
          Tensor &scores, Tensor &context)
@@ -230,7 +204,6 @@ void QKV(const Tensor &query, const Tensor &value, const Tensor &key,
     {
         int offset = h * head_dim;
         int score_offset = h * sequence_length * sequence_length;
-
         cblas_sgemm(
             CblasRowMajor,
             CblasNoTrans,
@@ -256,7 +229,6 @@ void QKV(const Tensor &query, const Tensor &value, const Tensor &key,
             float sum = sum_avx2(row, sequence_length);
             division(row, sum, sequence_length);
         }
-
         cblas_sgemm(
             CblasRowMajor,
             CblasNoTrans,
