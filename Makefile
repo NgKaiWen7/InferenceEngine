@@ -1,7 +1,7 @@
 MKLROOT ?= /opt/intel/oneapi/mkl/2026.1
 ICOMPROOT ?= /opt/intel/oneapi/compiler/2026.1
 
-CXXFLAGS += -std=c++23 -O3 -march=native -fopenmp -DNDEBUG
+CXXFLAGS += -std=c++23 -O3 -mavx512f -march=native -fopenmp -DNDEBUG
 
 INCLUDES := -Iinclude -I"$(MKLROOT)/include"
 LIBDIRS  := -L"$(MKLROOT)/lib/intel64" -Wl,-rpath,"$(MKLROOT)/lib/intel64" \
