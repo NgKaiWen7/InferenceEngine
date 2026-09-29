@@ -30,7 +30,7 @@ void Embedding::load(const std::string file_path) {
 
 void Embedding::encode(const std::vector<int> &token_ids, torch::Tensor &embeddings) {
     constexpr float eps = 1e-5f;
-    embeddings = torch::empty({static_cast<int64_t>(token_ids.size()), embedding_dim}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
+    embeddings = torch::empty({static_cast<int64_t>(token_ids.size()), embedding_dim}, torch::TensorOptions().dtype(torch::kFloat16).device(torch::kCPU));
     for (size_t i = 0; i < token_ids.size(); ++i) {
         int64_t token_id = token_ids[i];
         int64_t position_id = i + 2;

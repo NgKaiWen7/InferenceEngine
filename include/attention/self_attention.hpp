@@ -1,48 +1,43 @@
 #pragma once
 
-#include <string>
-#include <vector>
 #include "safetensors.hpp"
 #include <stdfloat>
+#include <string>
+#include <torch/torch.h>
+#include <vector>
 
-struct TransformerWorkspace
-{
-    Tensor query;
-    Tensor key;
-    Tensor value;
-    Tensor scores;
-    Tensor context;
-    Tensor attention_dense;
-    Tensor intermediate;
+struct TransformerWorkspace {
+    torch::Tensor query;
+    torch::Tensor key;
+    torch::Tensor value;
+    torch::Tensor scores;
+    torch::Tensor context;
+    torch::Tensor attention_dense;
+    torch::Tensor intermediate;
 
-    Tensor buffer_a;
-    Tensor buffer_b;
+    TransformerWorkspace(size_t sequence_length) {
+        int64_t seq = static_cast<int64_t>(sequence_length);
 
-    TransformerWorkspace(size_t sequence_length)
-    {
-        query.allocate({static_cast<int64_t>(sequence_length), 1024});
-        key.allocate({static_cast<int64_t>(sequence_length), 1024});
-        value.allocate({static_cast<int64_t>(sequence_length), 1024});
-        context.allocate({static_cast<int64_t>(sequence_length), 1024});
+        torch::TensorOptions options = torch::TensorOptions().dtype(torch::kFloat16).device(torch::kCPU);
 
-        scores.allocate({16, static_cast<int64_t>(sequence_length), static_cast<int64_t>(sequence_length)});
+        query = torch::empty({seq, 1024}, options);
+        key = torch::empty({seq, 1024}, options);
+        value = torch::empty({seq, 1024}, options);
+        context = torch::empty({seq, 1024}, options);
 
-        attention_dense.allocate({static_cast<int64_t>(sequence_length), 1024});
-        intermediate.allocate({static_cast<int64_t>(sequence_length), 4096});
+        scores = torch::empty({16, seq, seq}, options);
 
-        buffer_a.allocate({static_cast<int64_t>(sequence_length), 1024});
-        buffer_b.allocate({static_cast<int64_t>(sequence_length), 1024});
+        attention_dense = torch::empty({seq, 1024}, options);
+        intermediate = torch::empty({seq, 4096}, options);
     }
 };
 
-class TransformerLayer
-{
-public:
+class TransformerLayer {
+  public:
     void load(const std::string &file_path, int layer);
-    void linear(const Tensor &input, const Tensor &weight, const Tensor &bias, Tensor &output);
-    void attention(const Tensor &input, Tensor &output, TransformerWorkspace &workspace);
+    void forward(const torch::Tensor &input, torch::Tensor &output, TransformerWorkspace &workspace);
 
-private:
+  private:
     SafeTensorLoader tensor_loader;
 
     const int hidden_size = 1024;
@@ -50,27 +45,30 @@ private:
     const int head_dim = 64;
     const float scaling = 1 / std::sqrt(static_cast<float>(head_dim));
 
-    Tensor attention_query_weight;
-    Tensor attention_query_bias;
+    torch::Tensor attention_query_weight;
+    torch::Tensor attention_query_bias;
 
-    Tensor attention_key_weight;
-    Tensor attention_key_bias;
+    torch::Tensor attention_key_weight;
+    torch::Tensor attention_key_bias;
 
-    Tensor attention_value_weight;
-    Tensor attention_value_bias;
+    torch::Tensor attention_value_weight;
+    torch::Tensor attention_value_bias;
 
-    Tensor attention_output_weight;
-    Tensor attention_output_bias;
+    torch::Tensor attention_output_weight;
+    torch::Tensor attention_output_bias;
 
-    Tensor attention_layernorm_weight;
-    Tensor attention_layernorm_bias;
+    torch::Tensor attention_layernorm_weight;
+    torch::Tensor attention_layernorm_bias;
 
-    Tensor intermediate_weight;
-    Tensor intermediate_bias;
+    torch::Tensor intermediate_weight;
+    torch::Tensor intermediate_bias;
 
-    Tensor output_weight;
-    Tensor output_bias;
+    torch::Tensor output_weight;
+    torch::Tensor output_bias;
 
-    Tensor output_layernorm_weight;
-    Tensor output_layernorm_bias;
+    torch::Tensor output_layernorm_weight;
+    torch::Tensor output_layernorm_bias;
+
+    torch::nn::functional::LayerNormFuncOptions attention_norm_options{{1024}};
+    torch::nn::functional::LayerNormFuncOptions output_norm_options{{1024}};
 };
