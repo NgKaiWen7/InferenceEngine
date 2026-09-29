@@ -1,21 +1,20 @@
 #pragma once
 
+#include <cstdint>
+#include <fstream>
 #include <iostream>
 #include <string>
-#include <fstream>
-#include <cstdint>
 #include <vector>
 
 #include <nlohmann/json.hpp>
 
+#include "utils/conversion.hpp"
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include "utils/conversion.hpp"
 
-struct Tensor
-{
+struct Tensor {
     std::string name;
     std::string dtype;
 
@@ -27,8 +26,7 @@ struct Tensor
     float *data = nullptr;
     size_t size = 0;
 
-    void allocate(const std::vector<int64_t> &new_shape)
-    {
+    void allocate(const std::vector<int64_t> &new_shape) {
         shape = new_shape;
 
         size = 1;
@@ -40,29 +38,22 @@ struct Tensor
     }
 };
 
-class SafeTensorLoader
-{
+class SafeTensorLoader {
 
-public:
-    ~SafeTensorLoader()
-    {
-        close();
-    }
+  public:
+    ~SafeTensorLoader() { close(); }
 
-    bool load(const std::string &path)
-    {
+    bool load(const std::string &path) {
         fd = open(path.c_str(), O_RDONLY);
 
-        if (fd < 0)
-        {
+        if (fd < 0) {
             std::cerr << "Cannot open safetensors\n";
             return false;
         }
 
         file_size = lseek(fd, 0, SEEK_END);
 
-        if (file_size <= 0)
-        {
+        if (file_size <= 0) {
             std::cerr << "Invalid file size\n";
             return false;
         }
@@ -70,8 +61,7 @@ public:
         // mmap whole file
         mapped = mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
 
-        if (mapped == MAP_FAILED)
-        {
+        if (mapped == MAP_FAILED) {
             std::cerr << "mmap failed\n";
             mapped = nullptr;
             return false;
@@ -94,10 +84,8 @@ public:
         return true;
     }
 
-    void print_tensors()
-    {
-        for (auto &item : metadata.items())
-        {
+    void print_tensors() {
+        for (auto &item : metadata.items()) {
             std::cout << item.key() << "\n";
 
             std::cout << "dtype: " << item.value()["dtype"] << "\n";
@@ -113,8 +101,7 @@ public:
     }
 
     // Return pointer directly into mmap
-    Tensor get_tensor(const std::string &name)
-    {
+    Tensor get_tensor(const std::string &name) {
         if (!metadata.contains(name))
             throw std::runtime_error("Tensor not found: " + name);
 
@@ -131,37 +118,28 @@ public:
 
         tensor.size = tensor.end - tensor.start;
 
-        char* raw_data =
+        char *raw_data =
             static_cast<char *>(mapped) + data_offset + tensor.start;
 
         size_t elements = tensor.size / sizeof(uint16_t);
 
         tensor.data = new float[elements];
 
-        to_float(
-            raw_data,
-            tensor.data,
-            elements);
+        to_float(raw_data, tensor.data, elements);
 
         return tensor;
     }
 
-    nlohmann::json &get_metadata()
-    {
-        return metadata;
-    }
+    nlohmann::json &get_metadata() { return metadata; }
 
-private:
-    void close()
-    {
-        if (mapped)
-        {
+  private:
+    void close() {
+        if (mapped) {
             munmap(mapped, file_size);
 
             mapped = nullptr;
         }
-        if (fd >= 0)
-        {
+        if (fd >= 0) {
             ::close(fd);
             fd = -1;
         }

@@ -1,17 +1,17 @@
 #pragma once
 
-#include <string>
-#include <vector>
 #include "safetensors.hpp"
 #include <stdfloat>
+#include <string>
+#include <torch/torch.h>
+#include <vector>
 
-class Embedding
-{
-public:
+class Embedding {
+  public:
     void load(const std::string file_path);
-    void encode(const std::vector<int> &token_ids, Tensor &embeddings);
+    void encode(const std::vector<int> &token_ids, torch::Tensor &embeddings);
 
-private:
+  private:
     int embedding_dim;
     int vocab_size;
 
@@ -22,10 +22,10 @@ private:
     int token_type_size;
 
     SafeTensorLoader tensor_loader;
-    Tensor embedding_weights;
-    Tensor position_weights;
-    Tensor token_type_weights;
+    torch::Tensor embedding_weights;
+    torch::Tensor position_weights;
+    torch::Tensor token_type_weights;
 
-    Tensor layernorm_weight;
-    Tensor layernorm_bias;
+    torch::Tensor layernorm_weight;
+    torch::Tensor layernorm_bias;
 };
