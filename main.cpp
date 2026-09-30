@@ -4,21 +4,33 @@
 #include <cblas.h>
 #include <chrono>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <stdfloat>
+#include <string>
 #include <torch/torch.h>
 #include <utility>
 
 int main() {
     BGEtokenizer tokenizer;
-    std::cout << torch::show_config() << std::endl;
     if (!tokenizer.load("bge-m3-safetensors/sentencepiece.bpe.model")) {
         std::cerr << "Failed to load tokenizer\n";
         return 1;
     }
+    std::ifstream file("text.txt");
+    if (!file.is_open()) {
+        std::cerr << "Error opening file!" << std::endl;
+        return 1;
+    }
+    // 2. Read the file buffer into a stringstream
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string file_contents = buffer.str();
+    std::replace(file_contents.begin(), file_contents.end(), '\n', ' ');
+    std::vector<int> token_ids = tokenizer.encode(file_contents);
 
     Embedding embedding_layer;
-    std::vector<int> token_ids(4096, 1);
     embedding_layer.load("bge-m3-safetensors/model.safetensors");
     torch::Tensor embeddings;
     embedding_layer.encode(token_ids, embeddings);
@@ -29,11 +41,9 @@ int main() {
         layers[i].load("bge-m3-safetensors/model.safetensors", i);
 
     torch::Tensor input = embeddings;
-    torch::Tensor output = embeddings;
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < 24; ++i) {
-        layers[i].forward(input, output, workspace);
-        input = output;
+        input = layers[i].forward(input, workspace);
     }
     torch::Tensor final_output = input;
     auto end = std::chrono::high_resolution_clock::now();

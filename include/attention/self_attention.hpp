@@ -10,7 +10,6 @@ struct TransformerWorkspace {
     torch::Tensor query;
     torch::Tensor key;
     torch::Tensor value;
-    torch::Tensor scores;
     torch::Tensor context;
     torch::Tensor attention_dense;
     torch::Tensor intermediate;
@@ -18,14 +17,12 @@ struct TransformerWorkspace {
     TransformerWorkspace(size_t sequence_length) {
         int64_t seq = static_cast<int64_t>(sequence_length);
 
-        torch::TensorOptions options = torch::TensorOptions().dtype(torch::kFloat16).device(torch::kCPU);
+        torch::TensorOptions options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
 
         query = torch::empty({seq, 1024}, options);
         key = torch::empty({seq, 1024}, options);
         value = torch::empty({seq, 1024}, options);
         context = torch::empty({seq, 1024}, options);
-
-        scores = torch::empty({16, seq, seq}, options);
 
         attention_dense = torch::empty({seq, 1024}, options);
         intermediate = torch::empty({seq, 4096}, options);
@@ -35,7 +32,7 @@ struct TransformerWorkspace {
 class TransformerLayer {
   public:
     void load(const std::string &file_path, int layer);
-    void forward(const torch::Tensor &input, torch::Tensor &output, TransformerWorkspace &workspace);
+    torch::Tensor forward(const torch::Tensor &input, TransformerWorkspace &workspace);
 
   private:
     SafeTensorLoader tensor_loader;
