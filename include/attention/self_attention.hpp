@@ -17,15 +17,15 @@ struct TransformerWorkspace {
     TransformerWorkspace(size_t sequence_length) {
         int64_t seq = static_cast<int64_t>(sequence_length);
 
-        torch::TensorOptions options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+        torch::TensorOptions options = torch::TensorOptions().dtype(torch::kFloat32);
 
-        query = torch::empty({seq, 1024}, options);
-        key = torch::empty({seq, 1024}, options);
-        value = torch::empty({seq, 1024}, options);
-        context = torch::empty({seq, 1024}, options);
+        query = torch::empty({seq, 1024}, options).to(torch::kCUDA);
+        key = torch::empty({seq, 1024}, options).to(torch::kCUDA);
+        value = torch::empty({seq, 1024}, options).to(torch::kCUDA);
+        context = torch::empty({seq, 1024}, options).to(torch::kCUDA);
 
-        attention_dense = torch::empty({seq, 1024}, options);
-        intermediate = torch::empty({seq, 4096}, options);
+        attention_dense = torch::empty({seq, 1024}, options).to(torch::kCUDA);
+        intermediate = torch::empty({seq, 4096}, options).to(torch::kCUDA);
     }
 };
 

@@ -10,15 +10,14 @@
 #include <stdfloat>
 #include <string>
 #include <torch/torch.h>
-#include <utility>
 
 int main() {
     BGEtokenizer tokenizer;
-    if (!tokenizer.load("bge-m3-safetensors/sentencepiece.bpe.model")) {
+    if (!tokenizer.load("/home/nkw/InferenceEngine/bge-m3-safetensors/sentencepiece.bpe.model")) {
         std::cerr << "Failed to load tokenizer\n";
         return 1;
     }
-    std::ifstream file("text.txt");
+    std::ifstream file("/home/nkw/InferenceEngine/text.txt");
     if (!file.is_open()) {
         std::cerr << "Error opening file!" << std::endl;
         return 1;
@@ -31,16 +30,17 @@ int main() {
     std::vector<int> token_ids = tokenizer.encode(file_contents);
 
     Embedding embedding_layer;
-    embedding_layer.load("bge-m3-safetensors/model.safetensors");
+    embedding_layer.load("/home/nkw/InferenceEngine/bge-m3-safetensors/model.safetensors");
     torch::Tensor embeddings;
     embedding_layer.encode(token_ids, embeddings);
 
     TransformerWorkspace workspace = TransformerWorkspace(token_ids.size());
     std::vector<TransformerLayer> layers(24);
     for (int i = 0; i < 24; ++i)
-        layers[i].load("bge-m3-safetensors/model.safetensors", i);
+        layers[i].load("/home/nkw/InferenceEngine/bge-m3-safetensors/model.safetensors", i);
 
     torch::Tensor input = embeddings;
+    input = input.to(torch::kCUDA);
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < 24; ++i) {
         input = layers[i].forward(input, workspace);

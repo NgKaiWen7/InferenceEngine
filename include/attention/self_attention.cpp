@@ -1,22 +1,21 @@
 #include "attention/self_attention.hpp"
 #include "safetensors.hpp"
 #include "utils/conversion.hpp"
-#include <bit>
 #include <cblas.h>
-#include <cstdint>
 #include <stdfloat>
 #include <torch/torch.h>
+#include <ATen/Context.h>
 
 void TransformerLayer::load(const std::string &file_path, int layer) {
     tensor_loader.load(file_path);
 
-    const auto options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    const auto options = torch::TensorOptions().dtype(torch::kFloat32);
 
     const std::string prefix = "encoder.layer." + std::to_string(layer) + ".";
 
     auto load_tensor = [&](const std::string &name) {
         Tensor temp = tensor_loader.get_tensor(prefix + name);
-        return torch::from_blob(temp.data, temp.shape, options).clone();
+        return torch::from_blob(temp.data, temp.shape, options).clone().to(torch::kCUDA);
     };
 
     attention_query_weight = load_tensor("attention.self.query.weight").transpose(0, 1);
