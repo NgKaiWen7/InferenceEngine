@@ -1,107 +1,83 @@
 #include "attention/self_attention.hpp"
 #include "safetensors.hpp"
 #include "utils/conversion.hpp"
-#include "utils/immitrin.hpp"
-#include <stdfloat>
-#include <cstdint>
-#include <bit>
 #include <cblas.h>
+#include <stdfloat>
+#include <torch/torch.h>
+#include <ATen/Context.h>
 
-void TransformerLayer::load(const std::string &file_path, int layer)
-{
+void TransformerLayer::load(const std::string &file_path, int layer) {
     tensor_loader.load(file_path);
 
-    std::string prefix = "encoder.layer." + std::to_string(layer) + ".";
+    const auto options = torch::TensorOptions().dtype(torch::kFloat32);
 
-    attention_query_weight = tensor_loader.get_tensor(prefix + "attention.self.query.weight");
-    attention_query_bias = tensor_loader.get_tensor(prefix + "attention.self.query.bias");
+    const std::string prefix = "encoder.layer." + std::to_string(layer) + ".";
 
-    attention_key_weight = tensor_loader.get_tensor(prefix + "attention.self.key.weight");
-    attention_key_bias = tensor_loader.get_tensor(prefix + "attention.self.key.bias");
+    auto load_tensor = [&](const std::string &name) {
+        Tensor temp = tensor_loader.get_tensor(prefix + name);
+        return torch::from_blob(temp.data, temp.shape, options).clone().to(torch::kCUDA);
+    };
 
-    attention_value_weight = tensor_loader.get_tensor(prefix + "attention.self.value.weight");
-    attention_value_bias = tensor_loader.get_tensor(prefix + "attention.self.value.bias");
+    attention_query_weight = load_tensor("attention.self.query.weight").transpose(0, 1);
+    attention_query_bias = load_tensor("attention.self.query.bias");
 
-    attention_output_weight = tensor_loader.get_tensor(prefix + "attention.output.dense.weight");
-    attention_output_bias = tensor_loader.get_tensor(prefix + "attention.output.dense.bias");
+    attention_key_weight = load_tensor("attention.self.key.weight").transpose(0, 1);
+    attention_key_bias = load_tensor("attention.self.key.bias");
 
-    attention_layernorm_weight = tensor_loader.get_tensor(prefix + "attention.output.LayerNorm.weight");
-    attention_layernorm_bias = tensor_loader.get_tensor(prefix + "attention.output.LayerNorm.bias");
+    attention_value_weight = load_tensor("attention.self.value.weight").transpose(0, 1);
+    attention_value_bias = load_tensor("attention.self.value.bias");
 
-    intermediate_weight = tensor_loader.get_tensor(prefix + "intermediate.dense.weight");
-    intermediate_bias = tensor_loader.get_tensor(prefix + "intermediate.dense.bias");
+    attention_output_weight = load_tensor("attention.output.dense.weight").transpose(0, 1);
+    attention_output_bias = load_tensor("attention.output.dense.bias");
 
-    output_weight = tensor_loader.get_tensor(prefix + "output.dense.weight");
-    output_bias = tensor_loader.get_tensor(prefix + "output.dense.bias");
+    attention_layernorm_weight = load_tensor("attention.output.LayerNorm.weight");
+    attention_layernorm_bias = load_tensor("attention.output.LayerNorm.bias");
 
-    output_layernorm_weight = tensor_loader.get_tensor(prefix + "output.LayerNorm.weight");
-    output_layernorm_bias = tensor_loader.get_tensor(prefix + "output.LayerNorm.bias");
+    intermediate_weight = load_tensor("intermediate.dense.weight").transpose(0, 1);
+    intermediate_bias = load_tensor("intermediate.dense.bias");
+
+    output_weight = load_tensor("output.dense.weight").transpose(0, 1);
+    output_bias = load_tensor("output.dense.bias");
+
+    output_layernorm_weight = load_tensor("output.LayerNorm.weight");
+    output_layernorm_bias = load_tensor("output.LayerNorm.bias");
+
+    attention_norm_options.weight(attention_layernorm_weight).bias(attention_layernorm_bias).eps(1e-5);
+
+    output_norm_options.weight(output_layernorm_weight).bias(output_layernorm_bias).eps(1e-5);
 }
-void TransformerLayer::linear(
-    const Tensor &input,
-    const Tensor &weight,
-    const Tensor &bias,
-    Tensor &output)
-{
-    size_t M = input.shape[0];
-    size_t K = input.shape[1];
-    size_t N = weight.shape[0];
-    cblas_sgemm(
-        CblasRowMajor,
-        CblasNoTrans,
-        CblasTrans,
-        M, N, K,
-        1.0f,
-        input.data, K,
-        weight.data, K,
-        0.0f,
-        output.data, N);
+torch::Tensor TransformerLayer::forward(const torch::Tensor &input, TransformerWorkspace &workspace) {
+    int64_t sequence_length = input.size(0);
 
-    for (size_t i = 0; i < M; ++i)
-        for (size_t j = 0; j < N; ++j)
-            output.data[i * N + j] += bias.data[j];
+    torch::Tensor &query = workspace.query;
+    torch::Tensor &value = workspace.value;
+    torch::Tensor &key = workspace.key;
 
-}
+    query = torch::matmul(input, attention_query_weight) + attention_query_bias;
+    key = torch::matmul(input, attention_key_weight) + attention_key_bias;
+    value = torch::matmul(input, attention_value_weight) + attention_value_bias;
 
-void TransformerLayer::attention(const Tensor &input, Tensor &output, TransformerWorkspace &workspace)
-{
-    size_t sequence_length = input.shape[0];
-    Tensor &query = workspace.query;
-    Tensor &value = workspace.value;
-    Tensor &key = workspace.key;
-    auto t0 = std::chrono::high_resolution_clock::now();
-    linear(input, attention_value_weight, attention_value_bias, value);
-    auto t1 = std::chrono::high_resolution_clock::now();
+    query = query.view({1, sequence_length, 16, 64}).transpose(1, 2);
+    key = key.view({1, sequence_length, 16, 64}).transpose(1, 2);
+    value = value.view({1, sequence_length, 16, 64}).transpose(1, 2);
 
-    double elapsed_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-    std::printf("attention value projection: %.4f ms\n", elapsed_ms);
+    torch::Tensor &context = workspace.context;
+    context = at::scaled_dot_product_attention(query, key, value, c10::nullopt, 0.0, false);
+    context = context.transpose(1, 2).contiguous().view({sequence_length, 1024});
 
-    linear(input, attention_query_weight, attention_query_bias, query);
-    linear(input, attention_key_weight, attention_key_bias, key);
+    torch::Tensor &attention_dense = workspace.attention_dense;
+    attention_dense = torch::matmul(context, attention_output_weight) + attention_output_bias;
 
-    Tensor &scores = workspace.scores;
-    Tensor &context = workspace.context;
-    QKV(query, value, key, num_heads, head_dim, sequence_length, hidden_size,scaling, scores, context);
+    attention_dense = attention_dense + input;
+    attention_dense = torch::nn::functional::layer_norm(attention_dense, attention_norm_options);
 
-    Tensor &attention_dense = workspace.attention_dense;
-    linear(context, attention_output_weight, attention_output_bias, attention_dense);
+    torch::Tensor &intermediate = workspace.intermediate;
+    intermediate = torch::matmul(attention_dense, intermediate_weight) + intermediate_bias;
 
-    residual(attention_dense, input);
+    intermediate = torch::gelu(intermediate);
+    intermediate = torch::matmul(intermediate, output_weight) + output_bias;
 
-    layer_norm(attention_dense, attention_layernorm_weight, attention_layernorm_bias);
+    intermediate = intermediate + attention_dense;
 
-    Tensor &intermediate = workspace.intermediate;
-    linear(attention_dense, intermediate_weight, intermediate_bias, intermediate);
-
-    #pragma omp parallel for
-    for (size_t i = 0; i < intermediate.size; i++){
-        intermediate.data[i] = 0.5f * intermediate.data[i] * (1.0f + std::erf(intermediate.data[i] * 0.7071067811865475f));
-    }
-    // gelu(intermediate);
-
-    linear(intermediate, output_weight, output_bias, output);
-
-    residual(output, attention_dense);
-
-    layer_norm(output, output_layernorm_weight, output_layernorm_bias);
+    return torch::nn::functional::layer_norm(intermediate, output_norm_options);
 }

@@ -1,65 +1,45 @@
 #include "embedding/embedding.hpp"
 #include "safetensors.hpp"
-#include <stdfloat>
-#include <cstdint>
 #include <bit>
+#include <cstdint>
 #include <immintrin.h>
+#include <stdfloat>
+#include <torch/torch.h>
 
-void Embedding::load(const std::string file_path)
-{
+void Embedding::load(const std::string file_path) {
     tensor_loader.load(file_path);
-    embedding_weights = tensor_loader.get_tensor("embeddings.word_embeddings.weight");
-    embedding_dim = embedding_weights.shape[1];
-    position_weights = tensor_loader.get_tensor("embeddings.position_embeddings.weight");
-    token_type_weights = tensor_loader.get_tensor("embeddings.token_type_embeddings.weight");
-    layernorm_weight = tensor_loader.get_tensor("embeddings.LayerNorm.weight");
-    layernorm_bias = tensor_loader.get_tensor("embeddings.LayerNorm.bias");
+
+    const auto options = torch::TensorOptions().dtype(torch::kFloat16);
+
+    auto load_tensor = [&](const std::string &name) {
+        Tensor temp = tensor_loader.get_tensor(name);
+        return torch::from_blob(temp.data, temp.shape, options).clone().to(torch::kCUDA, torch::kFloat32);
+    };
+
+    embedding_weights = load_tensor("embeddings.word_embeddings.weight");
+    embedding_dim = embedding_weights.size(1);
+
+    position_weights = load_tensor("embeddings.position_embeddings.weight");
+
+    token_type_weights = load_tensor("embeddings.token_type_embeddings.weight");
+
+    layernorm_weight = load_tensor("embeddings.LayerNorm.weight");
+
+    layernorm_bias = load_tensor("embeddings.LayerNorm.bias");
 }
-
-void Embedding::encode(
-    const std::vector<int> &token_ids,
-    Tensor &embeddings)
-{
+void Embedding::encode(const std::vector<int> &token_ids, torch::Tensor &embeddings) {
     constexpr float eps = 1e-5f;
-    embeddings.size = token_ids.size() * 1024;
-    embeddings.shape = {static_cast<int64_t>(token_ids.size()), static_cast<int64_t>(embedding_dim)};
-    embeddings.data = new float[embeddings.size];
-
-    #pragma omp parallel for
-    for (size_t i = 0; i < token_ids.size(); ++i)
-    {
-        int token_id = token_ids[i];
-        int position_id = i + 2;
-
-        const float *word = embedding_weights.data + token_id * embedding_dim;
-        const float *position = position_weights.data + position_id * embedding_dim;
-        const float *layernorm_w = layernorm_weight.data;
-        const float *layernorm_b = layernorm_bias.data;
-
-        float *embedding = embeddings.data + i * embedding_dim;
-
-        for (size_t j = 0; j < embedding_dim; ++j)
-            embedding[j] = word[j] + position[j] + token_type_weights.data[j];
-
-        float mean = 0.0f;
-
-        for (size_t j = 0; j < embedding_dim; ++j)
-            mean += embedding[j];
-
-        mean /= embedding_dim;
-        
-        float variance = 0.0f;
-        
-        for (size_t j = 0; j < embedding_dim; ++j)
-        {
-            float diff = embedding[j] - mean;
-            variance += diff * diff;
-        }
-        
-        variance /= embedding_dim;
-        
-        float inv_std = 1.0f / std::sqrt(variance + eps);
-        for (size_t j = 0; j < embedding_dim; ++j)
-            embedding[j] = (embedding[j] - mean) * inv_std * layernorm_w[j] + layernorm_b[j];
+    embeddings = torch::empty({static_cast<int64_t>(token_ids.size()), embedding_dim},
+                              torch::TensorOptions()).to(torch::kCUDA, torch::kFloat32);
+    for (size_t i = 0; i < token_ids.size(); ++i) {
+        int64_t token_id = token_ids[i];
+        int64_t position_id = i + 2;
+        torch::Tensor word = embedding_weights[token_id];
+        torch::Tensor position = position_weights[position_id];
+        torch::Tensor embedding = word + position + token_type_weights[0];
+        torch::Tensor mean = embedding.mean();
+        torch::Tensor variance = ((embedding - mean) * (embedding - mean)).mean();
+        torch::Tensor inv_std = torch::rsqrt(variance + eps);
+        embeddings[i] = (embedding - mean) * inv_std * layernorm_weight + layernorm_bias;
     }
 }

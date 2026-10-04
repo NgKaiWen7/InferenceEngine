@@ -6,12 +6,17 @@ readme = "README.md"
 authors = [
     { email = "ngkaiwen7@gmail.com" }
 ]
+<<<<<<< HEAD
 requires-python = ">=3.12"
 dependencies = [
     "huggingface>=0.0.1",
     "torch>=2.14.0",
     "transformers>=5.17.0",
 ]
+=======
+requires-python = ">=3.13"
+dependencies = []
+>>>>>>> libtorch
 
 [project.scripts]
 inferenceengine = "inferenceengine:main"
