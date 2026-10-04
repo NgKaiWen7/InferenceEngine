@@ -1,7 +1,7 @@
 models/**
 build/**
 models/qwen3-4B/**
-bge-m3-safetensors/*
+bge-m3-safetensors/**
 xlm-roberta-base/*
 onnxruntime-gpu/**
 Qwen3-1.7B/**
